@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-//go:embed IRS-Logo.svg
 var irsLogoSVG []byte
 
 // GatewayConfig holds Fabric connection configuration

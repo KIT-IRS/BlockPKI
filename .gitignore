@@ -21,6 +21,7 @@
 !chaincode/decentralized_pki.go
 !chaincode/go.mod
 !chaincode/go.sum
+!README.md
 
 # Explorer (track config only)
 !explorer/
