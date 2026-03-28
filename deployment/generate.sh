@@ -9,7 +9,7 @@
 #    4. Per-host env files for TSS peers
 #    5. Distributable bundles for each remote host
 #
-#  Prerequisites: yq (YAML parser), cryptogen, configtxgen, peer (Fabric bins)
+#  Prerequisites: yq (YAML parser), configtxgen, peer (Fabric bins)
 #  Install yq: go install github.com/mikefarah/yq/v4@latest
 #              or: sudo snap install yq
 # ============================================================================
@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$SCRIPT_DIR/network-config.yaml"
 OUTPUT="$SCRIPT_DIR/generated"
 PORT_STEP=1000
-CRYPTO_PROVIDER="${CRYPTO_PROVIDER:-cryptogen}"
+CRYPTO_PROVIDER="${CRYPTO_PROVIDER:-openssl}"
 
 # Colors
 RED='\033[0;31m'
@@ -31,14 +31,33 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+validate_join_mode() {
+    local mode="$1"
+    local context="$2"
+    local lower
+    lower=$(echo "$mode" | tr '[:upper:]' '[:lower:]')
+    if [ "$lower" = "observer" ]; then
+        error "join_mode=observer is no longer supported (${context}). Use member|request|none."
+    fi
+    if [ "$lower" != "member" ] && [ "$lower" != "request" ] && [ "$lower" != "none" ]; then
+        error "invalid join_mode '${mode}' for ${context}. Use member|request|none."
+    fi
+}
+
+if [ "$CRYPTO_PROVIDER" != "openssl" ]; then
+    error "Unsupported CRYPTO_PROVIDER='${CRYPTO_PROVIDER}'. Only 'openssl' is supported."
+fi
+
 # ---------------------------------------------------------------------------
 # Check dependencies
 # ---------------------------------------------------------------------------
 command -v yq >/dev/null 2>&1 || error "yq not found. Install: go install github.com/mikefarah/yq/v4@latest"
-command -v cryptogen >/dev/null 2>&1 || error "cryptogen not found. Ensure Fabric binaries are in PATH."
 command -v configtxgen >/dev/null 2>&1 || error "configtxgen not found. Ensure Fabric binaries are in PATH."
 
 info "Reading network config from $CONFIG"
+if [ -f "$SCRIPT_DIR/validate-config.sh" ]; then
+    bash "$SCRIPT_DIR/validate-config.sh" "$CONFIG"
+fi
 
 # ---------------------------------------------------------------------------
 # Parse config
@@ -48,6 +67,15 @@ ORDERER_IP=$(yq ".hosts.$ORDERER_HOST.ip" "$CONFIG")
 ORDERER_PORT=$(yq '.orderer.port' "$CONFIG")
 ORDERER_ADMIN_PORT=$(yq '.orderer.admin_port' "$CONFIG")
 ORDERER_OPS_PORT=$(yq '.orderer.operations_port' "$CONFIG")
+ORDERER_FQDN=$(yq '.orderer.hostname' "$CONFIG" | tr -d '\r')
+ORDERER_DOMAIN="${ORDERER_FQDN#*.}"
+ORDERER_NODE_NAME="${ORDERER_FQDN%%.*}"
+if [ -z "$ORDERER_FQDN" ] || [ "$ORDERER_FQDN" = "null" ]; then
+    error "orderer.hostname must be set in network-config.yaml"
+fi
+if [ -z "$ORDERER_DOMAIN" ] || [ "$ORDERER_DOMAIN" = "$ORDERER_FQDN" ]; then
+    error "orderer.hostname must include a domain (for example orderer.kit.edu)"
+fi
 CHANNEL_NAME=$(yq '.channel.name' "$CONFIG")
 MERKLE_TREE_ENABLED=$(yq '.features.merkle_tree' "$CONFIG" 2>/dev/null | tr -d '\r')
 if [ -z "$MERKLE_TREE_ENABLED" ] || [ "$MERKLE_TREE_ENABLED" = "null" ]; then
@@ -78,90 +106,17 @@ done
 # Clean & create output directory
 # ---------------------------------------------------------------------------
 rm -rf "$OUTPUT"
-mkdir -p "$OUTPUT/organizations/cryptogen"
 mkdir -p "$OUTPUT/organizations/ordererOrganizations"
 mkdir -p "$OUTPUT/configtx"
 
 # ---------------------------------------------------------------------------
-# 1. Generate cryptogen configs
+# 1. Generate crypto material (OpenSSL-only)
 # ---------------------------------------------------------------------------
-info "Generating cryptogen configs..."
-
-# Orderer crypto config
-# Collect ALL host IPs + "localhost" for SANs so the orderer TLS cert works from any host
-ORDERER_SANS="localhost"
-for host in "${HOSTS[@]}"; do
-    ORDERER_SANS="$ORDERER_SANS\n          - ${HOST_IPS[$host]}"
-done
-
-cat > "$OUTPUT/organizations/cryptogen/crypto-config-orderer.yaml" << EOF
-OrdererOrgs:
-  - Name: Orderer
-    Domain: example.com
-    EnableNodeOUs: true
-    Specs:
-      - Hostname: orderer
-        SANS:
-          - localhost
-$(for host in "${HOSTS[@]}"; do echo "          - ${HOST_IPS[$host]}"; done)
-EOF
-
-# Per-org crypto configs
-for org in "${ALL_ORGS[@]}"; do
-    ORG_NUM=${org#org}  # "org3" -> "3"
-    ORG_NAME="Org${ORG_NUM}"
-    DOMAIN=$(yq ".orgs.$org.domain" "$CONFIG")
-    HOST=${ORG_HOST[$org]}
-    HOST_IP=${HOST_IPS[$HOST]}
-    PEER_COUNT=$(yq ".orgs.$org.peers // 1" "$CONFIG")
-    USERS_COUNT=$(yq ".orgs.$org.users // 1" "$CONFIG")
-
-    cat > "$OUTPUT/organizations/cryptogen/crypto-config-${org}.yaml" << EOF
-PeerOrgs:
-  - Name: ${ORG_NAME}
-    Domain: ${DOMAIN}
-    EnableNodeOUs: true
-    Template:
-      Count: ${PEER_COUNT}
-      SANS:
-        - localhost
-        - ${HOST_IP}
-$(for h in "${HOSTS[@]}"; do
-    if [ "${HOST_IPS[$h]}" != "$HOST_IP" ]; then
-        echo "        - ${HOST_IPS[$h]}"
-    fi
-done)
-    Users:
-      Count: ${USERS_COUNT}
-EOF
-    info "  Created crypto-config-${org}.yaml (SANS: localhost, ${HOST_IP}, ...)"
-done
+info "Generating crypto material with OpenSSL (CRYPTO_PROVIDER=openssl)..."
+"$SCRIPT_DIR/openssl-generate.sh" "$CONFIG" "$OUTPUT"
 
 # ---------------------------------------------------------------------------
-# 2. Generate crypto material
-# ---------------------------------------------------------------------------
-if [ "$CRYPTO_PROVIDER" = "openssl" ]; then
-    info "Generating crypto material with OpenSSL (CRYPTO_PROVIDER=openssl)..."
-    "$SCRIPT_DIR/openssl-generate.sh" "$CONFIG" "$OUTPUT"
-else
-    info "Generating crypto material with cryptogen..."
-
-    # Orderer
-    cryptogen generate \
-        --config="$OUTPUT/organizations/cryptogen/crypto-config-orderer.yaml" \
-        --output="$OUTPUT/organizations"
-
-    # Each org
-    for org in "${ALL_ORGS[@]}"; do
-        cryptogen generate \
-            --config="$OUTPUT/organizations/cryptogen/crypto-config-${org}.yaml" \
-            --output="$OUTPUT/organizations"
-        info "  Generated crypto for $org"
-    done
-fi
-
-# ---------------------------------------------------------------------------
-# 3. Generate configtx.yaml
+# 2. Generate configtx.yaml
 # ---------------------------------------------------------------------------
 info "Generating configtx.yaml..."
 
@@ -169,10 +124,13 @@ info "Generating configtx.yaml..."
 ORG_SECTIONS=""
 ORG_REFS=""
 for org in "${ALL_ORGS[@]}"; do
-    ORG_NUM=${org#org}
-    ORG_NAME="Org${ORG_NUM}"
     MSPID=$(yq ".orgs.$org.mspid" "$CONFIG")
+    ORG_NAME=$(echo "$MSPID" | tr -cd '[:alnum:]_')
+    [ -z "$ORG_NAME" ] && ORG_NAME="$org"
+
     DOMAIN=$(yq ".orgs.$org.domain" "$CONFIG")
+    PEER_PORT=$(yq ".orgs.$org.peer_port" "$CONFIG")
+    ANCHOR_HOST="peer0.${DOMAIN}"
 
     ORG_SECTIONS+="
   - &${ORG_NAME}
@@ -192,6 +150,9 @@ for org in "${ALL_ORGS[@]}"; do
       Endorsement:
         Type: Signature
         Rule: \"OR('${MSPID}.peer')\"
+    AnchorPeers:
+      - Host: ${ANCHOR_HOST}
+        Port: ${PEER_PORT}
 "
     ORG_REFS+="
         - *${ORG_NAME}"
@@ -203,7 +164,7 @@ Organizations:
   - &OrdererOrg
     Name: OrdererOrg
     ID: OrdererMSP
-    MSPDir: ../organizations/ordererOrganizations/example.com/msp
+    MSPDir: ../organizations/ordererOrganizations/${ORDERER_DOMAIN}/msp
     Policies:
       Readers:
         Type: Signature
@@ -215,7 +176,7 @@ Organizations:
         Type: Signature
         Rule: "OR('OrdererMSP.admin')"
     OrdererEndpoints:
-      - orderer.example.com:${ORDERER_PORT}
+      - ${ORDERER_FQDN}:${ORDERER_PORT}
 ${ORG_SECTIONS}
 Capabilities:
   Channel: &ChannelCapabilities
@@ -248,7 +209,7 @@ Application: &ApplicationDefaults
 
 Orderer: &OrdererDefaults
   Addresses:
-    - orderer.example.com:${ORDERER_PORT}
+    - ${ORDERER_FQDN}:${ORDERER_PORT}
   BatchTimeout: 2s
   BatchSize:
     MaxMessageCount: 10
@@ -291,10 +252,10 @@ Profiles:
       OrdererType: etcdraft
       EtcdRaft:
         Consenters:
-          - Host: orderer.example.com
+          - Host: ${ORDERER_FQDN}
             Port: ${ORDERER_PORT}
-            ClientTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
-            ServerTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+            ClientTLSCert: ../organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/tls/server.crt
+            ServerTLSCert: ../organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/tls/server.crt
       Organizations:
         - *OrdererOrg
       Capabilities: *OrdererCapabilities
@@ -333,7 +294,7 @@ for host in "${HOSTS[@]}"; do
     EXTRA_HOSTS=""
     EXTRA_HOSTS_LINES=()
     if [ -n "$ORDERER_HOST" ] && [ "$ORDERER_IP" != "$HOST_IP" ]; then
-        EXTRA_HOSTS_LINES+=("      - \"orderer.example.com:${ORDERER_IP}\"")
+        EXTRA_HOSTS_LINES+=("      - \"${ORDERER_FQDN}:${ORDERER_IP}\"")
     fi
     for org in "${ALL_ORGS[@]}"; do
         DOMAIN=$(yq ".orgs.$org.domain" "$CONFIG")
@@ -360,7 +321,7 @@ EOF
 
     # Volume declarations
     if [ "$is_orderer" = "true" ]; then
-        echo "  orderer.example.com:" >> "$HOST_DIR/docker-compose.yaml"
+        echo "  ${ORDERER_FQDN}:" >> "$HOST_DIR/docker-compose.yaml"
     fi
     for org in "${host_orgs[@]}"; do
         DOMAIN=$(yq ".orgs.$org.domain" "$CONFIG")
@@ -383,8 +344,8 @@ EOF
     if [ "$is_orderer" = "true" ]; then
         cat >> "$HOST_DIR/docker-compose.yaml" << EOF
 
-  orderer.example.com:
-    container_name: orderer.example.com
+  ${ORDERER_FQDN}:
+    container_name: ${ORDERER_FQDN}
     image: hyperledger/fabric-orderer:2.5.14
     labels:
       service: hyperledger-fabric
@@ -411,10 +372,10 @@ EOF
     working_dir: /root
     command: orderer
     volumes:
-      - ./organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp:/var/hyperledger/orderer/msp
-      - ./organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls:/var/hyperledger/orderer/tls
+      - ./organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/msp:/var/hyperledger/orderer/msp
+      - ./organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/tls:/var/hyperledger/orderer/tls
       - ./channel-artifacts/${CHANNEL_NAME}.block:/var/hyperledger/orderer/orderer.genesis.block
-      - orderer.example.com:/var/hyperledger/production/orderer
+      - ${ORDERER_FQDN}:/var/hyperledger/production/orderer
     ports:
       - "${ORDERER_PORT}:${ORDERER_PORT}"
       - "${ORDERER_ADMIN_PORT}:${ORDERER_ADMIN_PORT}"
@@ -523,13 +484,14 @@ for org in "${ALL_ORGS[@]}"; do
 
     BASE_P2P_PORT=$(yq ".orgs.$org.p2p_port" "$CONFIG")
     BASE_WEBUI_PORT=$(yq ".orgs.$org.webui_port" "$CONFIG")
-    ORG_JOIN_MODE=$(yq ".orgs.$org.join_mode" "$CONFIG" 2>/dev/null | tr -d '\r')
+    ORG_JOIN_MODE=$(yq -r ".orgs.$org.join_mode // \"none\"" "$CONFIG" 2>/dev/null | tr -d '\r' | tr '[:upper:]' '[:lower:]')
     if [ -z "$ORG_JOIN_MODE" ] || [ "$ORG_JOIN_MODE" = "null" ]; then
         ORG_JOIN_MODE="none"
     fi
+    validate_join_mode "$ORG_JOIN_MODE" "org ${org}"
     ORG_MSP_USER=$(yq -r ".orgs.$org.msp_user // \"\"" "$CONFIG" | tr -d '\r')
     if [ -z "$ORG_MSP_USER" ] || [ "$ORG_MSP_USER" = "null" ]; then
-        ORG_MSP_USER="Admin@${DOMAIN}"
+        ORG_MSP_USER="Member1@${DOMAIN}"
     fi
 
     NODE_COUNT=$(yq ".orgs.$org.tss_nodes | length" "$CONFIG" 2>/dev/null | tr -d '\r')
@@ -540,10 +502,11 @@ for org in "${ALL_ORGS[@]}"; do
                 NODE_NAME="node$((i+1))"
             fi
 
-            NODE_JOIN_MODE=$(yq -r ".orgs.$org.tss_nodes[$i].join_mode // \"\"" "$CONFIG" | tr -d '\r')
+            NODE_JOIN_MODE=$(yq -r ".orgs.$org.tss_nodes[$i].join_mode // \"\"" "$CONFIG" | tr -d '\r' | tr '[:upper:]' '[:lower:]')
             if [ -z "$NODE_JOIN_MODE" ] || [ "$NODE_JOIN_MODE" = "null" ]; then
                 NODE_JOIN_MODE="$ORG_JOIN_MODE"
             fi
+            validate_join_mode "$NODE_JOIN_MODE" "org ${org} tss_nodes[$i]"
 
             NODE_P2P_PORT=$(yq ".orgs.$org.tss_nodes[$i].p2p_port // \"\"" "$CONFIG" | tr -d '\r')
             if [ -z "$NODE_P2P_PORT" ] || [ "$NODE_P2P_PORT" = "null" ]; then
@@ -583,16 +546,26 @@ export TSS_MSP_USER=${NODE_MSP_USER}
 export TSS_CRYPTO_PATH=./organizations/peerOrganizations/${DOMAIN}
 export TSS_PEER_ENDPOINT=localhost:${PEER_PORT}
 export TSS_PEER_HOSTNAME=${PEER_HOST}
-export TSS_P2P_PORT=${NODE_P2P_PORT}
-export TSS_P2P_ADVERTISE=${NODE_P2P_ADVERTISE}
-export TSS_WEBUI_PORT=${NODE_WEBUI_PORT}
-export TSS_STATE_DIR=${NODE_STATE_DIR}
-export TSS_NODE_ID=${NODE_ID_OVERRIDE}
-export TSS_ORDERER_ENDPOINT=${ORDERER_IP}:${ORDERER_PORT}
-export TSS_JOIN_MODE=${NODE_JOIN_MODE}
-export TSS_METRICS_ENABLED=false
-export MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
-export TSS_MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
+export TSS_P2P_TLS_SERVER_CERT_PATH=./organizations/peerOrganizations/${DOMAIN}/peers/${PEER_HOST}/tls/server.crt
+export TSS_P2P_TLS_SERVER_KEY_PATH=./organizations/peerOrganizations/${DOMAIN}/peers/${PEER_HOST}/tls/server.key
+export TSS_P2P_TLS_CLIENT_CERT_PATH=./organizations/peerOrganizations/${DOMAIN}/users/${NODE_MSP_USER}/msp/signcerts/${NODE_MSP_USER}-cert.pem
+export TSS_P2P_TLS_CLIENT_KEY_PATH=./organizations/peerOrganizations/${DOMAIN}/users/${NODE_MSP_USER}/msp/keystore/priv_sk
+  export TSS_P2P_PORT=${NODE_P2P_PORT}
+  export TSS_P2P_ADVERTISE=${NODE_P2P_ADVERTISE}
+  export TSS_WEBUI_PORT=${NODE_WEBUI_PORT}
+  export TSS_WEBUI_ENABLED=false
+  export TSS_WEBUI_BIND=127.0.0.1
+  export TSS_POLL_INTERVAL_SECONDS=10
+  export TSS_STATE_DIR=${NODE_STATE_DIR}
+  export TSS_NODE_ID=${NODE_ID_OVERRIDE}
+  export TSS_ORDERER_ENDPOINT=${ORDERER_IP}:${ORDERER_PORT}
+  export TSS_JOIN_MODE=${NODE_JOIN_MODE}
+  export TSS_AUTO_FRESH_DKG_ENABLED=true
+  export TSS_AUTO_RESTORE_SNAPSHOT_ENABLED=true
+  export TSS_STUCK_SESSION_TIMEOUT_SECONDS=180
+  export TSS_AUTO_FRESH_DKG_COOLDOWN_SECONDS=300
+  export MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
+  export TSS_MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
 EOF
             info "  Created tss-${org}-${NODE_NAME}.env (P2P advertise: ${NODE_P2P_ADVERTISE})"
         done
@@ -614,16 +587,26 @@ export TSS_MSP_USER=${MSP_USER}
 export TSS_CRYPTO_PATH=./organizations/peerOrganizations/${DOMAIN}
 export TSS_PEER_ENDPOINT=localhost:${PEER_PORT}
 export TSS_PEER_HOSTNAME=${PEER_HOST}
-export TSS_P2P_PORT=${P2P_PORT}
-export TSS_P2P_ADVERTISE=${HOST_IP}:${P2P_PORT}
-export TSS_WEBUI_PORT=${WEBUI_PORT}
-export TSS_STATE_DIR=state/${org}
-export TSS_NODE_ID=
-export TSS_ORDERER_ENDPOINT=${ORDERER_IP}:${ORDERER_PORT}
-export TSS_JOIN_MODE=${JOIN_MODE}
-export TSS_METRICS_ENABLED=false
-export MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
-export TSS_MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
+export TSS_P2P_TLS_SERVER_CERT_PATH=./organizations/peerOrganizations/${DOMAIN}/peers/${PEER_HOST}/tls/server.crt
+export TSS_P2P_TLS_SERVER_KEY_PATH=./organizations/peerOrganizations/${DOMAIN}/peers/${PEER_HOST}/tls/server.key
+export TSS_P2P_TLS_CLIENT_CERT_PATH=./organizations/peerOrganizations/${DOMAIN}/users/${MSP_USER}/msp/signcerts/${MSP_USER}-cert.pem
+export TSS_P2P_TLS_CLIENT_KEY_PATH=./organizations/peerOrganizations/${DOMAIN}/users/${MSP_USER}/msp/keystore/priv_sk
+  export TSS_P2P_PORT=${P2P_PORT}
+  export TSS_P2P_ADVERTISE=${HOST_IP}:${P2P_PORT}
+  export TSS_WEBUI_PORT=${WEBUI_PORT}
+  export TSS_WEBUI_ENABLED=false
+  export TSS_WEBUI_BIND=127.0.0.1
+  export TSS_POLL_INTERVAL_SECONDS=10
+  export TSS_STATE_DIR=state/${org}
+  export TSS_NODE_ID=
+  export TSS_ORDERER_ENDPOINT=${ORDERER_IP}:${ORDERER_PORT}
+  export TSS_JOIN_MODE=${JOIN_MODE}
+  export TSS_AUTO_FRESH_DKG_ENABLED=true
+  export TSS_AUTO_RESTORE_SNAPSHOT_ENABLED=true
+  export TSS_STUCK_SESSION_TIMEOUT_SECONDS=180
+  export TSS_AUTO_FRESH_DKG_COOLDOWN_SECONDS=300
+  export MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
+  export TSS_MERKLE_TREE_ENABLED=${MERKLE_TREE_ENABLED}
 EOF
         info "  Created tss-${org}.env (P2P advertise: ${HOST_IP}:${P2P_PORT})"
     fi
@@ -685,14 +668,14 @@ for host in "${HOSTS[@]}"; do
 
     # Orderer MSP for all hosts (needed for channel operations)
     mkdir -p "$HOST_DIR/organizations/ordererOrganizations"
-    mkdir -p "$HOST_DIR/organizations/ordererOrganizations/example.com/msp"
+    mkdir -p "$HOST_DIR/organizations/ordererOrganizations/${ORDERER_DOMAIN}/msp"
     # Copy contents, not the directory itself, to avoid msp/msp nesting
-    cp -r "$OUTPUT/organizations/ordererOrganizations/example.com/msp/." \
-          "$HOST_DIR/organizations/ordererOrganizations/example.com/msp" 2>/dev/null || true
+    cp -r "$OUTPUT/organizations/ordererOrganizations/${ORDERER_DOMAIN}/msp/." \
+          "$HOST_DIR/organizations/ordererOrganizations/${ORDERER_DOMAIN}/msp" 2>/dev/null || true
     # Orderer TLS cert (needed by peers to verify orderer)
-    mkdir -p "$HOST_DIR/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls"
-    cp "$OUTPUT/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt" \
-       "$HOST_DIR/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt" 2>/dev/null || true
+    mkdir -p "$HOST_DIR/organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/tls"
+    cp "$OUTPUT/organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/tls/server.crt" \
+       "$HOST_DIR/organizations/ordererOrganizations/${ORDERER_DOMAIN}/orderers/${ORDERER_FQDN}/tls/server.crt" 2>/dev/null || true
 
     info "  Bundled crypto for $host (orgs: ${host_orgs[*]})"
 done
@@ -745,18 +728,9 @@ info ""
 info "Output directory: $OUTPUT/"
 info ""
 info "Per-host bundles are in: $OUTPUT/hosts/<hostname>/"
-info "Each bundle contains:"
-info "  - docker-compose.yaml     (Fabric containers for that host)"
-info "  - organizations/          (crypto material)"
-info "  - channel-artifacts/      (genesis block)"
-info "  - tss-<org>.env / tss-<org>-<node>.env (TSS peer environment config)"
-info "  - peercfg/                (Fabric peer core.yaml)"
 info ""
 info "Next steps:"
-info "  1. Edit network-config.yaml with your actual IPs"
-info "  2. Re-run ./generate.sh"
-info "  3. Copy each host bundle to the target machine"
-info "  4. On each host: docker compose up -d"
-info "  5. Create channel and join peers (see README)"
-info "  6. Deploy chaincode"
-info "  7. Start TSS peers: source tss-<org>.env && ./tss_peer <org> (or tss-<org>-<node>.env)"
+info "   Copy each host bundle to the target machine"
+info "   First time: run setip"
+info "   On each host: docker compose up -d"
+info "   Create channel and join peers (follow the Readme)"

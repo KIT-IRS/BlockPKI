@@ -1,18 +1,37 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
+"""compute_durations.py derives workflow stage durations from metric-event logs.
+
+Runtime flow: run after benchmark execution to convert metric JSONL streams into
+`events.csv` and `durations.csv` summary artifacts.
+"""
+
 import argparse
 import csv
 import json
+import re
 from collections import defaultdict
 from datetime import datetime
 
 
+# parse_ts parses RFC3339/RFC3339Nano-like timestamps into datetime objects.
+# Lifecycle: Post-run benchmark metrics reduction.
+# Called by: diff.
+# Triggered: whenever timestamp deltas are computed during duration extraction.
 def parse_ts(ts):
+    """parse_ts helper for benchmark tooling."""
+    ts = str(ts).strip()
     if ts.endswith("Z"):
         ts = ts[:-1] + "+00:00"
+    ts = re.sub(r"(\.\d{6})\d+(?=(?:[+-]\d{2}:\d{2})?$)", r"\1", ts)
     return datetime.fromisoformat(ts)
 
 
+# load_events reads newline-delimited JSON metric events from one or more files.
+# Lifecycle: Post-run benchmark metrics reduction.
+# Called by: main.
+# Triggered: at script startup before grouping and duration computation.
 def load_events(paths):
+    """load_events helper for benchmark tooling."""
     events = []
     for path in paths:
         with open(path, "r", encoding="utf-8") as f:
@@ -27,7 +46,12 @@ def load_events(paths):
     return events
 
 
+# main builds event and duration CSV artifacts from raw metric logs.
+# Lifecycle: Post-run benchmark metrics reduction.
+# Called by: module entrypoint (`if __name__ == "__main__"`).
+# Triggered: when the script is executed from CLI or suite automation.
 def main():
+    """main helper for benchmark tooling."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--metrics", nargs="+", required=True)
     parser.add_argument("--outdir", default=".")
@@ -66,7 +90,12 @@ def main():
 
     durations = []
 
+    # pick handles pick behavior for benchmark tooling.
+    # Lifecycle: Benchmark script runtime, aggregation, and analysis.
+    # Called by: module-internal callers (see surrounding flow).
+    # Triggered: CLI execution and helper orchestration.
     def pick(ev, *keys):
+        """pick helper for benchmark tooling."""
         for k in keys:
             if k in ev:
                 return ev.get(k)
@@ -158,7 +187,12 @@ def main():
             writer.writerow(row)
 
 
+# diff returns seconds between two timestamp strings (empty string when unavailable).
+# Lifecycle: Post-run benchmark metrics reduction.
+# Called by: main.
+# Triggered: for each workflow segment duration written to `durations.csv`.
 def diff(a, b):
+    """diff helper for benchmark tooling."""
     if not a or not b:
         return ""
     try:

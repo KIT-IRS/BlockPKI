@@ -1,20 +1,31 @@
+// decentralized_pki.go implements the Fabric chaincode runtime for distributed CA governance, TSS-backed CSR signing, and certificate lifecycle state.
+// Runtime flow: Fabric invoke/query entrypoints call contract methods, which coordinate ledger state transitions, threshold policies, and verification helpers.
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"math"
 	"math/big"
+	"net"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/hyperledger/fabric-chaincode-go/pkg/cid"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -24,11 +35,8 @@ const merkleConfigKeyPrefix = "CONFIG:MERKLE:"
 // ===================== SECURITY CONSTANTS =====================
 
 // MinOrgsForApproval requires votes from at least this many different orgs
-// This ensures cross-org consensus for critical decisions (set to 1 to disable)
+// This ensures cross-org consensus (set to 1 to disable)
 const MinOrgsForApproval = 2
-
-// EnableSecurityLimits controls whether multi-org voting is enforced
-// Set to true for production deployments
 const EnableSecurityLimits = true
 
 type DecentralizedPKIContract struct {
@@ -40,10 +48,8 @@ type DecentralizedPKIContract struct {
 type DistributedCA struct {
 	CAID             string               `json:"caId"`
 	Name             string               `json:"name"`
-	Organization     string               `json:"organization"`
 	ThresholdParams  ThresholdParameters  `json:"thresholdParams"`
-	Members          []string             `json:"members"`   // Full participants (DKG, signing, voting)
-	Observers        []string             `json:"observers"` // Observer nodes (query, CSR, no signing)
+	Members          []string             `json:"members"` // This stores the members
 	Epoch            int                  `json:"epoch"`
 	PublicKey        string               `json:"publicKey"`
 	PartySalt        string               `json:"partySalt"`
@@ -65,15 +71,17 @@ type GovernanceParameters struct {
 }
 
 type CSRProposal struct {
-	ProposalID   string    `json:"proposalId"`
-	MemberID     string    `json:"memberId"`
-	CSRData      string    `json:"csrData"`
-	SubmittedAt  time.Time `json:"submittedAt"`
-	VotingEndsAt time.Time `json:"votingEndsAt"`
-	Status       string    `json:"status"`
-	VotesFor     int       `json:"votesFor"`
-	VotesAgainst int       `json:"votesAgainst"`
-	VotersList   []string  `json:"votersList"`
+	ProposalID    string    `json:"proposalId"`
+	SubmitterID   string    `json:"submitterId"`
+	CSRData       string    `json:"csrData"`
+	SubmitterRole string    `json:"submitterRole"`
+	SubmitterCert string    `json:"submitterCertPem"`
+	SubmittedAt   time.Time `json:"submittedAt"`
+	VotingEndsAt  time.Time `json:"votingEndsAt"`
+	Status        string    `json:"status"`
+	VotesFor      int       `json:"votesFor"`
+	VotesAgainst  int       `json:"votesAgainst"`
+	VotersList    []string  `json:"votersList"`
 }
 
 type Vote struct {
@@ -85,7 +93,7 @@ type Vote struct {
 
 type PartialSignature struct {
 	SignerID       string    `json:"signerId"`
-	PartialSig     string    `json:"partialSig"`  // Base64 encoded partial signature
+	PartialSig     string    `json:"partialSig"`  // Hex-encoded combined signature "R:S"
 	SignerIndex    int       `json:"signerIndex"` // TSS party index
 	SubmittedAt    time.Time `json:"submittedAt"`
 	PublicKeyShare string    `json:"publicKeyShare"` // For verification
@@ -120,18 +128,18 @@ type Certificate struct {
 	SignatureS       string    `json:"signatureS,omitempty,optional"`
 }
 
-// CertificateMerkleState stores the latest Merkle root over all active certificates.
+// CertificateMerkleState stores the Merkle tree of active certificates
 // Updated after every certificate registration or revocation.
 type CertificateMerkleState struct {
 	MerkleRoot      string   `json:"merkleRoot"`
 	ActiveCertCount int      `json:"activeCertCount"`
-	LeafHashes      []string `json:"leafHashes"` // sorted cert hashes (leaves)
+	LeafHashes      []string `json:"leafHashes"`
 	UpdatedAt       string   `json:"updatedAt"`
 	TriggerAction   string   `json:"triggerAction"` // "certificate_registered" or "certificate_revoked"
 	TriggerCertID   string   `json:"triggerCertId"`
 }
 
-// MerkleConfig controls whether the certificate Merkle tree is maintained on-chain.
+// Whether the Merkle tree is updated
 type MerkleConfig struct {
 	Enabled   bool   `json:"enabled"`
 	UpdatedAt string `json:"updatedAt,omitempty,optional"`
@@ -139,19 +147,18 @@ type MerkleConfig struct {
 }
 
 type RevocationProposal struct {
-	ProposalID     string    `json:"proposalId"`
-	TargetMemberID string    `json:"targetMemberId"`
-	Reason         string    `json:"reason"`
-	SubmittedBy    string    `json:"submittedBy"`
-	SubmittedAt    time.Time `json:"submittedAt"`
-	VotingEndsAt   time.Time `json:"votingEndsAt"`
-	Status         string    `json:"status"`
-	VotesFor       int       `json:"votesFor"`
-	VotesAgainst   int       `json:"votesAgainst"`
-	VotersList     []string  `json:"votersList"`
+	ProposalID   string    `json:"proposalId"`
+	TargetNodeID string    `json:"targetNodeId"`
+	Reason       string    `json:"reason"`
+	SubmittedBy  string    `json:"submittedBy"`
+	SubmittedAt  time.Time `json:"submittedAt"`
+	VotingEndsAt time.Time `json:"votingEndsAt"`
+	Status       string    `json:"status"`
+	VotesFor     int       `json:"votesFor"`
+	VotesAgainst int       `json:"votesAgainst"`
+	VotersList   []string  `json:"votersList"`
 }
 
-// MemberRemovalProposal represents a governance proposal to remove a CA member.
 type MemberRemovalProposal struct {
 	ProposalID     string    `json:"proposalId"`
 	TargetMemberID string    `json:"targetMemberId"`
@@ -160,483 +167,166 @@ type MemberRemovalProposal struct {
 	CAID           string    `json:"caId"`
 	SubmittedAt    time.Time `json:"submittedAt"`
 	VotingEndsAt   time.Time `json:"votingEndsAt"`
-	Status         string    `json:"status"` // pending, approved, rejected, executed
+	Status         string    `json:"status"`
 	VotesFor       int       `json:"votesFor"`
 	VotesAgainst   int       `json:"votesAgainst"`
 	VotersList     []string  `json:"votersList"`
 }
 
-// JoinRequestProposal represents a self-request to join the CA as a full member.
 type JoinRequestProposal struct {
-	ProposalID   string    `json:"proposalId"`
-	CandidateID  string    `json:"candidateId"`
-	Reason       string    `json:"reason"`
-	SubmittedBy  string    `json:"submittedBy"`
-	CAID         string    `json:"caId"`
-	SubmittedAt  time.Time `json:"submittedAt"`
-	VotingEndsAt time.Time `json:"votingEndsAt"`
-	Status       string    `json:"status"` // pending, approved, rejected, executed
-	VotesFor     int       `json:"votesFor"`
-	VotesAgainst int       `json:"votesAgainst"`
-	VotersList   []string  `json:"votersList"`
+	ProposalID    string    `json:"proposalId"`
+	CandidateID   string    `json:"candidateId"`
+	CandidateRole string    `json:"candidateRole"`
+	CandidateCert string    `json:"candidateCertPem"`
+	Reason        string    `json:"reason"`
+	SubmittedBy   string    `json:"submittedBy"`
+	CAID          string    `json:"caId"`
+	SubmittedAt   time.Time `json:"submittedAt"`
+	VotingEndsAt  time.Time `json:"votingEndsAt"`
+	Status        string    `json:"status"`
+	VotesFor      int       `json:"votesFor"`
+	VotesAgainst  int       `json:"votesAgainst"`
+	VotersList    []string  `json:"votersList"`
 }
 
 type ReshareSession struct {
-	Epoch          int      `json:"epoch"`
-	TriggerReason  string   `json:"triggerReason"`
-	OldNodeSet     []string `json:"oldNodeSet"`
-	OldThreshold   int      `json:"oldThreshold"`
-	NewNodeSet     []string `json:"newNodeSet"`
-	NewThreshold   int      `json:"newThreshold"`
-	Status         string   `json:"status"` // initiated, acknowledged, completed, superseded
-	AckCount       int      `json:"ackCount"`
-	AcknowledgedBy []string `json:"acknowledgedBy"`
-	CompletionAckedBy   []string `json:"completionAckedBy"`
-	CompletionAckCount  int      `json:"completionAckCount"`
-	InitiatedAt    string   `json:"initiatedAt"`
-	CompletedAt    string   `json:"completedAt"`
-	NewCAPublicKey string   `json:"newCaPublicKey"`
-	OldPartySalt   string   `json:"oldPartySalt"`
-	NewPartySalt   string   `json:"newPartySalt"`
-	SupersededBy   int      `json:"supersededBy,omitempty,optional"`
-	SupersededAt   string   `json:"supersededAt,omitempty,optional"`
+	Epoch              int      `json:"epoch"`
+	TriggerReason      string   `json:"triggerReason"`
+	OldNodeSet         []string `json:"oldNodeSet"`
+	OldThreshold       int      `json:"oldThreshold"`
+	NewNodeSet         []string `json:"newNodeSet"`
+	NewThreshold       int      `json:"newThreshold"`
+	Status             string   `json:"status"`
+	AckCount           int      `json:"ackCount"`
+	AcknowledgedBy     []string `json:"acknowledgedBy"`
+	CompletionAckedBy  []string `json:"completionAckedBy"`
+	CompletionAckCount int      `json:"completionAckCount"`
+	InitiatedAt        string   `json:"initiatedAt"`
+	CompletedAt        string   `json:"completedAt"`
+	NewCAPublicKey     string   `json:"newCaPublicKey"`
+	OldPartySalt       string   `json:"oldPartySalt"`
+	NewPartySalt       string   `json:"newPartySalt"`
+	SupersededBy       int      `json:"supersededBy,omitempty,optional"`
+	SupersededAt       string   `json:"supersededAt,omitempty,optional"`
 }
 
-func normalizeReshareSession(reshare *ReshareSession) {
-	if reshare == nil {
+type storageAttributionTracker struct {
+	workflow                string
+	action                  string
+	proposalID              string
+	epoch                   string
+	logicalWriteBytesTotal  int
+	logicalDeleteBytesTotal int
+	logicalWriteByCategory  map[string]int
+	logicalDeleteByCategory map[string]int
+}
+
+// ===================== Helpers for storage attribution during benchmarking, emitted by tracker events =====================
+
+// derives normalized storage category values for downstream governance and signing logic
+// Called by: (*storageAttributionTracker).trackDelete, (*storageAttributionTracker).trackWrite.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func normalizeStorageCategory(category string) string {
+	switch strings.TrimSpace(strings.ToLower(category)) {
+	case "proposal":
+		return "proposal"
+	case "vote":
+		return "vote"
+	case "certificate":
+		return "certificate"
+	case "active_index":
+		return "active_index"
+	case "ca_state":
+		return "ca_state"
+	case "reshare_state":
+		return "reshare_state"
+	case "merkle_state":
+		return "merkle_state"
+	case "signing_state":
+		return "signing_state"
+	default:
+		return "other"
+	}
+}
+
+// manages storage attribution within chaincode state
+// Called by: (*DecentralizedPKIContract).ProposeRemoveMember, (*DecentralizedPKIContract).ProposeRevocation, (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SubmitCSR, (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).VoteOnRevocation, (*DecentralizedPKIContract).executeJoinApproval, (*DecentralizedPKIContract).executeMemberRemoval, (*DecentralizedPKIContract).executeRevocation.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func newStorageAttributionTracker(workflow string, action string, proposalID string, epoch string) *storageAttributionTracker {
+	return &storageAttributionTracker{
+		workflow:                strings.TrimSpace(workflow),
+		action:                  strings.TrimSpace(action),
+		proposalID:              strings.TrimSpace(proposalID),
+		epoch:                   strings.TrimSpace(epoch),
+		logicalWriteByCategory:  map[string]int{},
+		logicalDeleteByCategory: map[string]int{},
+	}
+}
+
+// manages write within chaincode state
+// Called by: internal helper paths (none in current static call graph).
+// Triggered: internal storage-attribution bookkeeping during state writes/deletes.
+func (t *storageAttributionTracker) trackWrite(category string, payload []byte) {
+	if t == nil {
 		return
 	}
-	if len(reshare.OldNodeSet) == 0 && len(reshare.NewNodeSet) > 0 {
-		reshare.OldNodeSet = append([]string(nil), reshare.NewNodeSet...)
+	if len(payload) <= 0 {
+		return
 	}
-	if reshare.OldThreshold == 0 && reshare.NewThreshold > 0 {
-		reshare.OldThreshold = reshare.NewThreshold
-	}
-	if reshare.CompletionAckedBy == nil {
-		reshare.CompletionAckedBy = []string{}
-	}
-	if reshare.CompletionAckCount == 0 && len(reshare.CompletionAckedBy) > 0 {
-		reshare.CompletionAckCount = len(reshare.CompletionAckedBy)
-	}
-	// Ensure fields are present even for legacy sessions where they were omitted.
-	if reshare.SupersededBy == 0 {
-		reshare.SupersededBy = -1
-	}
-	if strings.TrimSpace(reshare.SupersededAt) == "" {
-		reshare.SupersededAt = "n/a"
-	}
+	cat := normalizeStorageCategory(category)
+	t.logicalWriteBytesTotal += len(payload)
+	t.logicalWriteByCategory[cat] = t.logicalWriteByCategory[cat] + len(payload)
 }
 
-func nextPartySalt(current string) string {
-	cur := strings.TrimSpace(current)
-	if cur == "" {
-		return "new"
+// manages delete within chaincode state
+// Called by: internal helper paths (none in current static call graph).
+// Triggered: internal storage-attribution bookkeeping during state writes/deletes.
+func (t *storageAttributionTracker) trackDelete(category string, previousValue []byte) {
+	if t == nil {
+		return
 	}
-	if cur == "new" {
-		return ""
+	if len(previousValue) <= 0 {
+		return
 	}
-	return "new"
+	cat := normalizeStorageCategory(category)
+	t.logicalDeleteBytesTotal += len(previousValue)
+	t.logicalDeleteByCategory[cat] = t.logicalDeleteByCategory[cat] + len(previousValue)
 }
 
-// SponsoredMember tracks a sponsored membership for expedited joining
-type SponsoredMember struct {
-	MemberID     string   `json:"memberId"`
-	SponsorID    string   `json:"sponsorId"`
-	CAID         string   `json:"caId"`
-	Status       string   `json:"status"` // pending, approved, rejected
-	SponsoredAt  string   `json:"sponsoredAt"`
-	Endorsements []string `json:"endorsements"` // Other members who endorse this sponsorship
-	Reason       string   `json:"reason"`
+// manages event payload within chaincode state
+// Called by: internal helper paths (none in current static call graph).
+// Triggered: internal storage-attribution bookkeeping during state writes/deletes.
+func (t *storageAttributionTracker) applyToEventPayload(ctx contractapi.TransactionContextInterface, payload map[string]interface{}) {
+	if t == nil || payload == nil {
+		return
+	}
+	payload["eventVersion"] = 2
+	if t.workflow != "" {
+		payload["workflow"] = t.workflow
+	}
+	if t.action != "" {
+		payload["action"] = t.action
+	}
+	if t.proposalID != "" {
+		payload["proposalId"] = t.proposalID
+	}
+	if t.epoch != "" {
+		payload["epoch"] = t.epoch
+	}
+	if ctx != nil {
+		payload["txId"] = ctx.GetStub().GetTxID()
+	}
+	payload["logicalWriteBytesTotal"] = t.logicalWriteBytesTotal
+	payload["logicalDeleteBytesTotal"] = t.logicalDeleteBytesTotal
+	payload["logicalWriteByCategory"] = t.logicalWriteByCategory
+	payload["logicalDeleteByCategory"] = t.logicalDeleteByCategory
 }
 
-// SponsorJoinCA - An existing member sponsors a new member for expedited joining
-// The new member is immediately added if threshold endorsements are met
-// This is useful when the new member's Fabric identity is already trusted
-func (c *DecentralizedPKIContract) SponsorJoinCA(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-	newMemberID string,
-	reason string,
-) error {
-	if !strings.HasPrefix(newMemberID, "external::") {
-		if err := ensureCanonicalID(newMemberID); err != nil {
-			return err
-		}
-	}
+// ===================== CA JOIN Procedure =====================
 
-	// 1. Get sponsor identity
-	sponsorID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	// 2. Get CA and verify it exists
-	ca, err := c.GetTrustedCA(ctx, caId)
-	if err != nil {
-		return fmt.Errorf("CA not found: %w", err)
-	}
-
-	// 3. Verify sponsor is a CA member
-	isSponsorMember := false
-	for _, member := range ca.Members {
-		if member == sponsorID {
-			isSponsorMember = true
-			break
-		}
-	}
-	if !isSponsorMember {
-		return fmt.Errorf("only CA members can sponsor new members")
-	}
-
-	// 4. Check if new member is already a member
-	for _, member := range ca.Members {
-		if member == newMemberID {
-			return fmt.Errorf("already a member of this CA")
-		}
-	}
-
-	// 5. Create or update sponsorship record
-	sponsorshipKey := fmt.Sprintf("SPONSOR:%s:%s", caId, hash(newMemberID)[:16])
-	existing, _ := ctx.GetStub().GetState(sponsorshipKey)
-
-	var sponsorship SponsoredMember
-	if existing != nil {
-		json.Unmarshal(existing, &sponsorship)
-		if sponsorship.Status != "pending" {
-			return fmt.Errorf("sponsorship already %s", sponsorship.Status)
-		}
-		// Add new endorsement if not already endorsed by this sponsor
-		for _, e := range sponsorship.Endorsements {
-			if e == sponsorID {
-				return fmt.Errorf("you already endorsed this member")
-			}
-		}
-		sponsorship.Endorsements = append(sponsorship.Endorsements, sponsorID)
-	} else {
-		txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
-		sponsoredAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339)
-		sponsorship = SponsoredMember{
-			MemberID:     newMemberID,
-			SponsorID:    sponsorID,
-			CAID:         caId,
-			Status:       "pending",
-			SponsoredAt:  sponsoredAt,
-			Endorsements: []string{sponsorID},
-			Reason:       reason,
-		}
-	}
-
-	// 6. Check if enough endorsements for immediate admission
-	// Require threshold endorsements for expedited joining
-	requiredEndorsements := ca.ThresholdParams.Threshold
-	if requiredEndorsements < 1 {
-		requiredEndorsements = 1
-	}
-
-	if len(sponsorship.Endorsements) >= requiredEndorsements {
-		sponsorship.Status = "approved"
-
-		oldMembers := append([]string(nil), ca.Members...)
-		oldThreshold := ca.ThresholdParams.Threshold
-
-		// Add new member to CA
-		ca.Members = append(ca.Members, newMemberID)
-		ca.Epoch++
-		ca.ThresholdParams.TotalNodes = len(ca.Members)
-
-		// Remove from observers if this was a promotion
-		newObservers := make([]string, 0, len(ca.Observers))
-		for _, obs := range ca.Observers {
-			if obs != newMemberID {
-				newObservers = append(newObservers, obs)
-			}
-		}
-		ca.Observers = newObservers
-
-		// Recalculate threshold based on current governance ratio
-		newThreshold := calculateDynamicThreshold(len(ca.Members), ca.GovernanceParams.QuorumPercentage)
-		ca.ThresholdParams.Threshold = newThreshold
-
-		// Save updated CA
-		caJSON, _ := json.Marshal(ca)
-		ctx.GetStub().PutState("CA:"+caId, caJSON)
-
-		// Initiate reshare for the new member set
-		c.initiateReshare(ctx, ca.Epoch, "member_join_sponsored", newMemberID, oldMembers, oldThreshold, ca.Members, newThreshold)
-
-		// Emit event
-		eventData := map[string]interface{}{
-			"caId":      caId,
-			"newMember": newMemberID,
-			"sponsor":   sponsorID,
-			"epoch":     ca.Epoch,
-		}
-		eventBytes, _ := json.Marshal(eventData)
-		ctx.GetStub().SetEvent("MemberSponsoredJoin", eventBytes)
-
-	}
-
-	// 7. Save sponsorship record
-	sponsorshipJSON, _ := json.Marshal(sponsorship)
-	ctx.GetStub().PutState(sponsorshipKey, sponsorshipJSON)
-
-	return nil
-}
-
-// EndorseSponsoredMember - Additional member endorses a sponsored membership
-// When threshold endorsements are reached, the member is automatically admitted
-func (c *DecentralizedPKIContract) EndorseSponsoredMember(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-	newMemberID string,
-) error {
-	// This is essentially calling SponsorJoinCA again to add endorsement
-	return c.SponsorJoinCA(ctx, caId, newMemberID, "")
-}
-
-// SponsorExternalIdentity - Sponsor an external identity (not a Fabric user) to join the CA
-// This allows organizations outside the Fabric channel to participate in the PKI
-// The externalID should be a stable identifier (e.g., public key hash, DID)
-// The publicKey is the external entity's signing public key
-func (c *DecentralizedPKIContract) SponsorExternalIdentity(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-	externalID string,
-	publicKey string,
-	organizationName string,
-	reason string,
-) error {
-	// 1. Get sponsor identity
-	sponsorID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	// 2. Get CA and verify it exists
-	ca, err := c.GetTrustedCA(ctx, caId)
-	if err != nil {
-		return fmt.Errorf("CA not found: %w", err)
-	}
-
-	// 3. Verify sponsor is a CA member
-	isSponsorMember := false
-	for _, member := range ca.Members {
-		if member == sponsorID {
-			isSponsorMember = true
-			break
-		}
-	}
-	if !isSponsorMember {
-		return fmt.Errorf("only CA members can sponsor external identities")
-	}
-
-	// 4. Create external member ID format: external::{orgName}::{publicKeyHash}
-	memberID := fmt.Sprintf("external::%s::%s", organizationName, hash(publicKey)[:32])
-
-	// 5. Check if already a member
-	for _, member := range ca.Members {
-		if member == memberID {
-			return fmt.Errorf("external identity already a member")
-		}
-	}
-
-	// 6. Store external identity details
-	externalKey := fmt.Sprintf("EXTERNAL:%s:%s", caId, hash(memberID)[:16])
-	externalData := map[string]string{
-		"memberId":     memberID,
-		"externalId":   externalID,
-		"publicKey":    publicKey,
-		"organization": organizationName,
-		"sponsorId":    sponsorID,
-	}
-	externalBytes, _ := json.Marshal(externalData)
-	ctx.GetStub().PutState(externalKey, externalBytes)
-
-	// 7. Use normal sponsorship flow
-	return c.SponsorJoinCA(ctx, caId, memberID, reason)
-}
-
-// GetExternalIdentity - Get details of a sponsored external identity
-func (c *DecentralizedPKIContract) GetExternalIdentity(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-	memberID string,
-) (string, error) {
-	externalKey := fmt.Sprintf("EXTERNAL:%s:%s", caId, hash(memberID)[:16])
-	data, err := ctx.GetStub().GetState(externalKey)
-	if err != nil {
-		return "", err
-	}
-	if data == nil {
-		return "", fmt.Errorf("external identity not found")
-	}
-	return string(data), nil
-}
-
-// ListPendingSponsorships - List all pending sponsorship requests for a CA
-func (c *DecentralizedPKIContract) ListPendingSponsorships(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-) (string, error) {
-	iterator, err := ctx.GetStub().GetStateByRange("SPONSOR:"+caId+":", "SPONSOR:"+caId+";")
-	if err != nil {
-		return "", err
-	}
-	defer iterator.Close()
-
-	sponsorships := make([]SponsoredMember, 0)
-	for iterator.HasNext() {
-		result, err := iterator.Next()
-		if err != nil {
-			continue
-		}
-		var s SponsoredMember
-		if err := json.Unmarshal(result.Value, &s); err != nil {
-			continue
-		}
-		if s.Status == "pending" {
-			sponsorships = append(sponsorships, s)
-		}
-	}
-
-	result, _ := json.Marshal(sponsorships)
-	return string(result), nil
-}
-
-// ===================== OBSERVER NODE MANAGEMENT =====================
-
-// JoinAsObserver allows any Fabric identity to join the CA as a read-only observer.
-// Observers can query CA state, submit CSRs, and verify certificates,
-// but cannot participate in DKG/signing, vote, or propose revocations.
-// No sponsorship required — any channel participant can observe.
-func (c *DecentralizedPKIContract) JoinAsObserver(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-) error {
-	memberID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, caId)
-	if err != nil {
-		return fmt.Errorf("CA not found: %w", err)
-	}
-
-	// Already a full member?
-	if contains(ca.Members, memberID) {
-		return fmt.Errorf("already a full member of this CA")
-	}
-
-	// Already an observer?
-	if contains(ca.Observers, memberID) {
-		return nil // Idempotent
-	}
-
-	ca.Observers = append(ca.Observers, memberID)
-
-	caJSON, _ := json.Marshal(ca)
-	ctx.GetStub().PutState("CA:"+caId, caJSON)
-
-	eventData := map[string]interface{}{
-		"caId":     caId,
-		"observer": memberID,
-		"action":   "observer_joined",
-	}
-	eventBytes, _ := json.Marshal(eventData)
-	ctx.GetStub().SetEvent("ObserverJoined", eventBytes)
-
-	return nil
-}
-
-// PromoteObserver promotes an observer to a full CA member.
-// Requires threshold endorsements from existing full members (uses sponsorship flow).
-// After promotion the observer is removed from the Observers list and added to Members,
-// which triggers a reshare so the new member receives a key share.
-func (c *DecentralizedPKIContract) PromoteObserver(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-	observerID string,
-	reason string,
-) error {
-	sponsorID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, caId)
-	if err != nil {
-		return fmt.Errorf("CA not found: %w", err)
-	}
-
-	// Verify caller is a full member
-	if !contains(ca.Members, sponsorID) {
-		return fmt.Errorf("only full members can promote observers")
-	}
-
-	// Verify target is actually an observer
-	if !contains(ca.Observers, observerID) {
-		return fmt.Errorf("%s is not an observer of this CA", observerID)
-	}
-
-	// Use the existing sponsorship flow for threshold endorsements
-	return c.SponsorJoinCA(ctx, caId, observerID, reason)
-}
-
-// RemoveObserver removes an observer from the CA.
-// Full members can remove any observer; an observer may remove themselves.
-func (c *DecentralizedPKIContract) RemoveObserver(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-	observerID string,
-	reason string,
-) error {
-	callerID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, caId)
-	if err != nil {
-		return fmt.Errorf("CA not found: %w", err)
-	}
-
-	if !contains(ca.Observers, observerID) {
-		return fmt.Errorf("%s is not an observer of this CA", observerID)
-	}
-
-	if callerID != observerID && !contains(ca.Members, callerID) {
-		return fmt.Errorf("only full members can remove observers")
-	}
-
-	newObservers := make([]string, 0, len(ca.Observers))
-	for _, obs := range ca.Observers {
-		if obs != observerID {
-			newObservers = append(newObservers, obs)
-		}
-	}
-	ca.Observers = newObservers
-
-	caJSON, _ := json.Marshal(ca)
-	ctx.GetStub().PutState("CA:"+caId, caJSON)
-
-	eventData := map[string]interface{}{
-		"caId":      caId,
-		"observer":  observerID,
-		"removedBy": callerID,
-		"reason":    reason,
-		"action":    "observer_removed",
-	}
-	eventBytes, _ := json.Marshal(eventData)
-	ctx.GetStub().SetEvent("ObserverRemoved", eventBytes)
-
-	return nil
-}
-
-// ===================== JOIN REQUESTS =====================
-
-// RequestJoinCA allows a node to submit a self-request to join as a full CA member.
-// Existing members must vote to approve. If approved, a reshare is initiated.
+// records a join proposal with identity, role, and policy checks
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) RequestJoinCA(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -648,13 +338,30 @@ func (c *DecentralizedPKIContract) RequestJoinCA(
 		return err
 	}
 
+	cert, certPEM, err := getClientCert(ctx)
+	if err != nil {
+		return err
+	}
+	role, err := getClientRole(ctx, cert)
+	if err != nil {
+		return err
+	}
+	if role != "member" {
+		return fmt.Errorf("certificate role not eligible for member join request")
+	}
+
 	ca, err := c.GetDistributedCA(ctx, caId)
 	if err != nil {
 		return fmt.Errorf("CA not found: %w", err)
 	}
-
 	if contains(ca.Members, candidateID) {
 		return fmt.Errorf("already a full member of this CA")
+	}
+	if err := c.assertNoActiveKeySession(ctx, "submit join request"); err != nil {
+		return err
+	}
+	if err := c.assertNoPendingMembershipGovernance(ctx, caId, "submit join request"); err != nil {
+		return err
 	}
 
 	if err := validateMemberOrgLimit(ca.Members, candidateID); err != nil {
@@ -677,34 +384,47 @@ func (c *DecentralizedPKIContract) RequestJoinCA(
 	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
 	votingEndsAt := submittedAt.AddDate(0, 0, ca.GovernanceParams.VotingPeriodDays)
 
+	if err := validateCertAtTime(cert, submittedAt); err != nil {
+		return err
+	}
+
 	proposal := JoinRequestProposal{
-		ProposalID:   proposalID,
-		CandidateID:  candidateID,
-		Reason:       reason,
-		SubmittedBy:  candidateID,
-		CAID:         caId,
-		SubmittedAt:  submittedAt,
-		VotingEndsAt: votingEndsAt,
-		Status:       "pending",
-		VotesFor:     0,
-		VotesAgainst: 0,
-		VotersList:   []string{},
+		ProposalID:    proposalID,
+		CandidateID:   candidateID,
+		CandidateRole: role,
+		CandidateCert: certPEM,
+		Reason:        reason,
+		SubmittedBy:   candidateID,
+		CAID:          caId,
+		SubmittedAt:   submittedAt,
+		VotingEndsAt:  votingEndsAt,
+		Status:        "pending",
+		VotesFor:      0,
+		VotesAgainst:  0,
+		VotersList:    []string{},
 	}
 
 	proposalJSON, _ := json.Marshal(proposal)
+	tracker := newStorageAttributionTracker("join", "member_join_requested", proposalID, strconv.Itoa(ca.Epoch))
+	tracker.trackWrite("proposal", proposalJSON)
 
-	eventPayload := map[string]string{
-		"proposalId": proposalID,
-		"candidate":  candidateID,
-		"action":     "member_join_requested",
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "join",
+		"action":       "member_join_requested",
+		"proposalId":   proposalID,
+		"candidate":    candidateID,
 	}
+	tracker.applyToEventPayload(ctx, eventPayload)
 	ev, _ := json.Marshal(eventPayload)
 	_ = ctx.GetStub().SetEvent("MemberJoinRequested", ev)
 
 	return ctx.GetStub().PutState(key, proposalJSON)
 }
 
-// VoteOnJoinRequest allows CA members to vote on a join request.
+// records and evaluates join votes so candidate admission only proceeds after quorum and approval constraints are satisfied.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) VoteOnJoinRequest(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -751,12 +471,33 @@ func (c *DecentralizedPKIContract) VoteOnJoinRequest(
 	if err != nil {
 		return err
 	}
+	if err := c.assertNoActiveKeySession(ctx, "vote on join request"); err != nil {
+		return err
+	}
 	totalAuthorized := len(ca.Members)
 	if totalAuthorized == 0 {
 		return fmt.Errorf("no members in CA")
 	}
+	tracker := newStorageAttributionTracker("join", "member_join_voted", proposalID, strconv.Itoa(ca.Epoch))
 	if !contains(ca.Members, voterID) {
 		return fmt.Errorf("voter not authorized")
+	}
+
+	if decision == "approve" {
+		candidateCert, err := parseCertFromPEM(proposal.CandidateCert)
+		if err != nil {
+			return fmt.Errorf("join request missing valid candidate certificate: %v", err)
+		}
+		if err := validateCertAtTime(candidateCert, currentTime); err != nil {
+			return err
+		}
+		role := strings.ToLower(strings.TrimSpace(proposal.CandidateRole))
+		if role == "" {
+			role = roleFromCert(candidateCert)
+		}
+		if role != "member" {
+			return fmt.Errorf("candidate role not eligible for membership")
+		}
 	}
 
 	vote := Vote{
@@ -766,6 +507,7 @@ func (c *DecentralizedPKIContract) VoteOnJoinRequest(
 		Rationale: rationale,
 	}
 	voteJSON, _ := json.Marshal(vote)
+	tracker.trackWrite("vote", voteJSON)
 	voteKey := fmt.Sprintf("JOINVOTE:%s:%s:%s", caId, proposalID, voterID)
 	if err := ctx.GetStub().PutState(voteKey, voteJSON); err != nil {
 		return err
@@ -777,9 +519,26 @@ func (c *DecentralizedPKIContract) VoteOnJoinRequest(
 	} else {
 		proposal.VotesAgainst++
 	}
+	voteEvent := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "join",
+		"action":       "member_join_voted",
+		"proposalId":   proposalID,
+		"candidateId":  proposal.CandidateID,
+		"voterId":      voterID,
+		"decision":     decision,
+		"votesFor":     proposal.VotesFor,
+		"votesAgainst": proposal.VotesAgainst,
+	}
+	proposalBytesForStorage, _ := json.Marshal(proposal)
+	tracker.trackWrite("proposal", proposalBytesForStorage)
+	tracker.applyToEventPayload(ctx, voteEvent)
+	if eventBytes, err := json.Marshal(voteEvent); err == nil {
+		_ = ctx.GetStub().SetEvent("MemberJoinVoted", eventBytes)
+	}
 
 	votesReceived := len(proposal.VotersList)
-	quorumReached := (votesReceived * 100 / totalAuthorized) >= ca.GovernanceParams.QuorumPercentage
+	quorumReached := hasNetworkWideApproval(votesReceived, totalAuthorized, ca.GovernanceParams.QuorumPercentage)
 
 	if quorumReached {
 		if err := validateMultiOrgVotes(proposal.VotersList); err != nil {
@@ -787,14 +546,18 @@ func (c *DecentralizedPKIContract) VoteOnJoinRequest(
 			return ctx.GetStub().PutState(fmt.Sprintf("JOINREQ:%s:%s", caId, proposalID), proposalJSON)
 		}
 
-		approvalPercentage := proposal.VotesFor * 100 / votesReceived
-		if approvalPercentage >= ca.GovernanceParams.ApprovalThreshold {
+		if hasNetworkWideApproval(proposal.VotesFor, totalAuthorized, ca.GovernanceParams.ApprovalThreshold) {
 			proposal.Status = "approved"
 			if err := c.executeJoinApproval(ctx, caId, &proposal); err != nil {
 				return err
 			}
 			proposal.Status = "executed"
-		} else {
+		} else if !canStillReachNetworkWideApproval(
+			proposal.VotesFor,
+			votesReceived,
+			totalAuthorized,
+			ca.GovernanceParams.ApprovalThreshold,
+		) {
 			proposal.Status = "rejected"
 		}
 	}
@@ -803,11 +566,17 @@ func (c *DecentralizedPKIContract) VoteOnJoinRequest(
 	return ctx.GetStub().PutState(fmt.Sprintf("JOINREQ:%s:%s", caId, proposalID), proposalJSON)
 }
 
+// finalizes an approved join proposal and updates CA membership on-chain
+// Called by: (*DecentralizedPKIContract).VoteOnJoinRequest.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func (c *DecentralizedPKIContract) executeJoinApproval(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
 	proposal *JoinRequestProposal,
 ) error {
+	if err := c.assertNoActiveKeySession(ctx, "execute join approval"); err != nil {
+		return err
+	}
 	ca, err := c.GetDistributedCA(ctx, caId)
 	if err != nil {
 		return err
@@ -823,6 +592,7 @@ func (c *DecentralizedPKIContract) executeJoinApproval(
 
 	oldMembers := append([]string(nil), ca.Members...)
 	oldThreshold := ca.ThresholdParams.Threshold
+	tracker := newStorageAttributionTracker("join", "member_join_approved", proposal.ProposalID, "")
 
 	ca.Members = append(ca.Members, proposal.CandidateID)
 	ca.Epoch++
@@ -832,16 +602,9 @@ func (c *DecentralizedPKIContract) executeJoinApproval(
 		ca.GovernanceParams.QuorumPercentage,
 	)
 
-	// Remove from observers if present
-	newObservers := make([]string, 0, len(ca.Observers))
-	for _, obs := range ca.Observers {
-		if obs != proposal.CandidateID {
-			newObservers = append(newObservers, obs)
-		}
-	}
-	ca.Observers = newObservers
-
 	caJSON, _ := json.Marshal(ca)
+	tracker.epoch = strconv.Itoa(ca.Epoch)
+	tracker.trackWrite("ca_state", caJSON)
 	if err := ctx.GetStub().PutState("CA:"+caId, caJSON); err != nil {
 		return err
 	}
@@ -850,20 +613,28 @@ func (c *DecentralizedPKIContract) executeJoinApproval(
 	if err := c.initiateReshare(ctx, ca.Epoch, "member_join_requested", proposal.CandidateID, oldMembers, oldThreshold, ca.Members, ca.ThresholdParams.Threshold); err != nil {
 		return err
 	}
+	reshareState, _ := ctx.GetStub().GetState("RESHARE:" + strconv.Itoa(ca.Epoch))
+	tracker.trackWrite("reshare_state", reshareState)
 
 	eventPayload := map[string]interface{}{
-		"caId":      caId,
-		"candidate": proposal.CandidateID,
-		"epoch":     ca.Epoch,
-		"action":    "member_join_approved",
+		"eventVersion": 2,
+		"workflow":     "join",
+		"action":       "member_join_approved",
+		"caId":         caId,
+		"proposalId":   proposal.ProposalID,
+		"candidate":    proposal.CandidateID,
+		"epoch":        ca.Epoch,
 	}
+	tracker.applyToEventPayload(ctx, eventPayload)
 	eventBytes, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("MemberJoinApproved", eventBytes)
 
 	return nil
 }
 
-// ListPendingJoinRequests lists pending join requests for a CA.
+// lists Pending join requests from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) ListPendingJoinRequests(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -895,7 +666,9 @@ func (c *DecentralizedPKIContract) ListPendingJoinRequests(
 	return string(result), nil
 }
 
-// GetNodeRole returns the role of a node in the CA: "full", "observer", or "none".
+// retrieves Node Role from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetNodeRole(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -909,1338 +682,14 @@ func (c *DecentralizedPKIContract) GetNodeRole(
 	if contains(ca.Members, nodeID) {
 		return "full", nil
 	}
-	if contains(ca.Observers, nodeID) {
-		return "observer", nil
-	}
 	return "none", nil
-}
-
-// ListObservers returns the list of observer nodes for a CA.
-func (c *DecentralizedPKIContract) ListObservers(
-	ctx contractapi.TransactionContextInterface,
-	caId string,
-) (string, error) {
-	ca, err := c.GetDistributedCA(ctx, caId)
-	if err != nil {
-		return "", fmt.Errorf("CA not found: %w", err)
-	}
-
-	result, _ := json.Marshal(ca.Observers)
-	return string(result), nil
-}
-
-// ===================== CA INITIALIZATION =====================
-// =================================================================
-// =================================================================
-
-func (c *DecentralizedPKIContract) InitializeDistributedCA(
-	ctx contractapi.TransactionContextInterface,
-	caID string,
-	name string,
-	organization string,
-	threshold int,
-	initialPublicKey string,
-) error {
-	exists, err := c.CAExists(ctx, caID)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("CA %s already exists", caID)
-	}
-
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return fmt.Errorf("failed to get transaction timestamp: %v", err)
-	}
-	createdAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-
-	ca := DistributedCA{
-		CAID:         caID,
-		Name:         name,
-		Organization: organization,
-		PublicKey:    initialPublicKey,
-		PartySalt:    "",
-		ThresholdParams: ThresholdParameters{
-			Threshold:  threshold,
-			TotalNodes: 0,
-			Scheme:     "ECDSA-TSS",
-		},
-		CreatedAt: createdAt,
-		IsActive:  true,
-		Members:   []string{},
-		Observers: []string{},
-		GovernanceParams: GovernanceParameters{
-			VotingPeriodDays:  7,
-			QuorumPercentage:  50, // 2/3 majority
-			ApprovalThreshold: 50,
-		},
-	}
-
-	caJSON, err := json.Marshal(ca)
-	if err != nil {
-		return fmt.Errorf("failed to marshal CA: %v", err)
-	}
-
-	return ctx.GetStub().PutState("CA:"+caID, caJSON)
-}
-
-// GetTrustedCA returns the CA view expected by bootstrap scripts.
-func (c *DecentralizedPKIContract) GetTrustedCA(
-	ctx contractapi.TransactionContextInterface,
-	caID string,
-) (*DistributedCA, error) {
-	return c.GetDistributedCA(ctx, caID)
-}
-
-func (c *DecentralizedPKIContract) BootstrapJoinCA(
-	ctx contractapi.TransactionContextInterface,
-	caID string,
-	bootstrapLimit int,
-) error {
-	memberID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, caID)
-	if err != nil {
-		return err
-	}
-
-	if contains(ca.Members, memberID) {
-		return nil
-	}
-
-	if len(ca.Members) >= bootstrapLimit {
-		return fmt.Errorf("bootstrap closed: %d members already joined", len(ca.Members))
-	}
-
-	oldMembers := append([]string(nil), ca.Members...)
-	oldThreshold := ca.ThresholdParams.Threshold
-
-	ca.Members = append(ca.Members, memberID)
-	ca.ThresholdParams.TotalNodes = len(ca.Members)
-	ca.ThresholdParams.Threshold = calculateDynamicThreshold(
-		len(ca.Members),
-		66, // or ca.GovernanceParams.QuorumPercentage
-	)
-	ca.Epoch++
-
-	b, _ := json.Marshal(ca)
-	if err := ctx.GetStub().PutState("CA:"+caID, b); err != nil {
-		return err
-	}
-
-	// Capture existing DKG (if any) before possibly creating a new one
-	existingDKG, _ := ctx.GetStub().GetState("DKG:0")
-	createdDKG := false
-
-	// Trigger DKG when we have enough members (at least 2) and no key yet
-	// DKG requires multiple parties - can't do it with just 1 member
-	if len(ca.Members) >= 2 && ca.PublicKey == "" {
-		// Check if DKG already initiated
-		if existingDKG == nil {
-			// No existing DKG session - create it directly here
-			// (Don't call InitiateDKG to avoid read-after-write issues)
-
-			txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
-			initiatedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
-
-			dkgSession := map[string]interface{}{
-				"epoch":       0,
-				"reason":      "initial_dkg",
-				"members":     ca.Members,
-				"threshold":   ca.ThresholdParams.Threshold,
-				"status":      "initiated",
-				"ackCount":    0,
-				"ackedBy":     []string{},
-				"initiatedAt": initiatedAt,
-			}
-
-			sessionJSON, _ := json.Marshal(dkgSession)
-			ctx.GetStub().PutState("DKG:0", sessionJSON)
-
-			// Emit DKGInitiated event with full payload
-			eventPayload := map[string]interface{}{
-				"epoch":     0,
-				"members":   ca.Members,
-				"threshold": ca.ThresholdParams.Threshold,
-				"action":    "dkg_initiated",
-			}
-			eventBytes, _ := json.Marshal(eventPayload)
-			ctx.GetStub().SetEvent("DKGInitiated", eventBytes)
-			createdDKG = true
-		}
-	}
-
-	// If a DKG already exists or a key has been established, a bootstrap join should
-	// trigger a reshare so the new member is included in the key shares.
-	if !createdDKG && (existingDKG != nil || ca.PublicKey != "") {
-		// Avoid duplicating a reshare for the same epoch if it already exists
-		reshareKey := "RESHARE:" + strconv.Itoa(ca.Epoch)
-		if existingReshare, _ := ctx.GetStub().GetState(reshareKey); existingReshare == nil {
-			_ = c.initiateReshare(ctx, ca.Epoch, "member_join_bootstrap", memberID, oldMembers, oldThreshold, ca.Members, ca.ThresholdParams.Threshold)
-		}
-	}
-
-	return nil
-}
-
-// =================================================================
-// ===================== DKG & RESHARE MANAGEMENT =====================
-// =================================================================
-// =================================================================
-
-// InitiateDKG initiates the initial Distributed Key Generation for the CA
-// This is called after all founding members have joined via bootstrap
-// Only callable by a CA member
-func (c *DecentralizedPKIContract) InitiateDKG(
-	ctx contractapi.TransactionContextInterface,
-	caID string,
-) error {
-	memberID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, caID)
-	if err != nil {
-		return err
-	}
-
-	// Check if caller is a CA member
-	if !contains(ca.Members, memberID) {
-		return fmt.Errorf("only CA members can initiate DKG")
-	}
-
-	// Check if DKG has already started or completed
-	if ca.PublicKey != "" {
-		return fmt.Errorf("DKG already completed; public key is set")
-	}
-
-	// Create a DKG session (epoch 0 is reserved for initial DKG)
-	dkgSession := map[string]interface{}{
-		"epoch":       0,
-		"reason":      "initial_dkg",
-		"members":     ca.Members,
-		"threshold":   ca.ThresholdParams.Threshold,
-		"status":      "initiated",
-		"initiatedAt": time.Now().Unix(),
-	}
-
-	sessionJSON, err := json.Marshal(dkgSession)
-	if err != nil {
-		return err
-	}
-
-	// Store DKG session
-	if err := ctx.GetStub().PutState("DKG:0", sessionJSON); err != nil {
-		return err
-	}
-
-	// Emit event to trigger DKG on peers
-	eventPayload := map[string]interface{}{
-		"epoch":  0,
-		"action": "dkg_initiated",
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("DKGInitiated", eventBytes)
-
-	return nil
-}
-
-// ForceFreshDKG resets the CA public key and starts a brand-new DKG session
-// for the current membership. This discards the existing key and requires
-// all members to complete DKG again.
-func (c *DecentralizedPKIContract) ForceFreshDKG(
-	ctx contractapi.TransactionContextInterface,
-	caID string,
-	reason string,
-) error {
-	memberID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, caID)
-	if err != nil {
-		return err
-	}
-
-	if !contains(ca.Members, memberID) {
-		return fmt.Errorf("only CA members can force a fresh DKG")
-	}
-
-	if reason == "" {
-		reason = "fresh_dkg"
-	}
-
-	// Supersede any in-progress reshares to avoid cross-epoch confusion
-	supersedeAt := time.Now().UTC().Format(time.RFC3339Nano)
-	iter, err := ctx.GetStub().GetStateByRange("RESHARE:", "RESHARE;")
-	if err == nil {
-		defer iter.Close()
-		for iter.HasNext() {
-			kv, err := iter.Next()
-			if err != nil {
-				return err
-			}
-			var sess ReshareSession
-			if err := json.Unmarshal(kv.Value, &sess); err != nil {
-				continue
-			}
-			if sess.Status == "completed" || sess.Status == "superseded" {
-				continue
-			}
-			sess.Status = "superseded"
-			sess.CompletedAt = supersedeAt
-			sess.SupersededAt = supersedeAt
-			sess.SupersededBy = ca.Epoch + 1
-			kvBytes, err := json.Marshal(sess)
-			if err == nil {
-				_ = ctx.GetStub().PutState(kv.Key, kvBytes)
-			}
-		}
-	}
-
-	// Reset CA key and bump epoch to indicate a new key generation round
-	ca.PublicKey = ""
-	ca.PartySalt = ""
-	ca.Epoch++
-	ca.ThresholdParams.TotalNodes = len(ca.Members)
-	ca.ThresholdParams.Threshold = calculateDynamicThreshold(len(ca.Members), ca.GovernanceParams.QuorumPercentage)
-
-	caJSON, _ := json.Marshal(ca)
-	if err := ctx.GetStub().PutState("CA:"+caID, caJSON); err != nil {
-		return err
-	}
-
-	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
-	initiatedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
-
-	dkgSession := map[string]interface{}{
-		"epoch":       0,
-		"reason":      reason,
-		"members":     ca.Members,
-		"threshold":   ca.ThresholdParams.Threshold,
-		"status":      "initiated",
-		"ackCount":    0,
-		"ackedBy":     []string{},
-		"initiatedAt": initiatedAt,
-	}
-
-	sessionJSON, err := json.Marshal(dkgSession)
-	if err != nil {
-		return err
-	}
-	if err := ctx.GetStub().PutState("DKG:0", sessionJSON); err != nil {
-		return err
-	}
-
-	eventPayload := map[string]interface{}{
-		"epoch":     0,
-		"members":   ca.Members,
-		"threshold": ca.ThresholdParams.Threshold,
-		"action":    "fresh_dkg_initiated",
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("DKGInitiated", eventBytes)
-
-	return nil
-}
-
-// GetDKGSession returns a DKG session by epoch
-func (c *DecentralizedPKIContract) GetDKGSession(
-	ctx contractapi.TransactionContextInterface,
-	epochStr string,
-) (string, error) {
-	dkgKey := "DKG:" + epochStr
-	dkgBytes, err := ctx.GetStub().GetState(dkgKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to read DKG session: %v", err)
-	}
-	if dkgBytes == nil {
-		return "", fmt.Errorf("DKG session not found for epoch %s", epochStr)
-	}
-	return string(dkgBytes), nil
-}
-
-// AcknowledgeDKG acknowledges readiness for initial DKG (epoch 0)
-// This is separate from AcknowledgeReshare which handles reshare sessions
-func (c *DecentralizedPKIContract) AcknowledgeDKG(
-	ctx contractapi.TransactionContextInterface,
-	epochStr string,
-) error {
-	nodeID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Get DKG session
-	dkgKey := "DKG:" + epochStr
-	dkgBytes, err := ctx.GetStub().GetState(dkgKey)
-	if err != nil {
-		return err
-	}
-	if dkgBytes == nil {
-		return fmt.Errorf("DKG session not found for epoch %s", epochStr)
-	}
-
-	// Parse the session
-	var dkgSession map[string]interface{}
-	if err := json.Unmarshal(dkgBytes, &dkgSession); err != nil {
-		return err
-	}
-
-	status, _ := dkgSession["status"].(string)
-	if status != "initiated" {
-		return fmt.Errorf("DKG session not in initiated state, current status: %s", status)
-	}
-
-	// Get members list
-	membersRaw, _ := dkgSession["members"].([]interface{})
-	members := make([]string, 0, len(membersRaw))
-	for _, m := range membersRaw {
-		if s, ok := m.(string); ok {
-			members = append(members, s)
-		}
-	}
-
-	// Check if caller is a member
-	if !contains(members, nodeID) {
-		return fmt.Errorf("node %s is not a member of this DKG session", nodeID)
-	}
-
-	// Get ackedBy list
-	ackedByRaw, _ := dkgSession["ackedBy"].([]interface{})
-	ackedBy := make([]string, 0, len(ackedByRaw))
-	for _, a := range ackedByRaw {
-		if s, ok := a.(string); ok {
-			ackedBy = append(ackedBy, s)
-		}
-	}
-
-	// Check if already acknowledged
-	if contains(ackedBy, nodeID) {
-		return fmt.Errorf("node already acknowledged this DKG session")
-	}
-
-	// Add to acknowledged list
-	ackedBy = append(ackedBy, nodeID)
-	dkgSession["ackedBy"] = ackedBy
-	dkgSession["ackCount"] = len(ackedBy)
-
-	// Get threshold
-	threshold := 1
-	if t, ok := dkgSession["threshold"].(float64); ok {
-		threshold = int(t)
-	}
-
-	// Check if all required nodes have acknowledged
-	if len(ackedBy) >= threshold {
-		dkgSession["status"] = "ready"
-
-		// Emit DKGReady event
-		epoch, _ := strconv.Atoi(epochStr)
-		eventPayload := map[string]interface{}{
-			"epoch":   epoch,
-			"action":  "dkg_ready",
-			"members": members,
-		}
-		eventBytes, _ := json.Marshal(eventPayload)
-		ctx.GetStub().SetEvent("DKGReady", eventBytes)
-	}
-
-	// Save updated session
-	updatedBytes, err := json.Marshal(dkgSession)
-	if err != nil {
-		return err
-	}
-
-	return ctx.GetStub().PutState(dkgKey, updatedBytes)
-}
-
-// CompleteDKG marks the initial DKG as completed and sets the CA public key
-// This should be called after all nodes have completed TSS keygen off-chain
-func (c *DecentralizedPKIContract) CompleteDKG(
-	ctx contractapi.TransactionContextInterface,
-	epochStr string,
-	publicKey string,
-) error {
-	nodeID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Get DKG session
-	dkgKey := "DKG:" + epochStr
-	dkgBytes, err := ctx.GetStub().GetState(dkgKey)
-	if err != nil {
-		return err
-	}
-	if dkgBytes == nil {
-		return fmt.Errorf("DKG session not found for epoch %s", epochStr)
-	}
-
-	// Parse the session
-	var dkgSession map[string]interface{}
-	if err := json.Unmarshal(dkgBytes, &dkgSession); err != nil {
-		return err
-	}
-
-	status, _ := dkgSession["status"].(string)
-	if status == "completed" {
-		return fmt.Errorf("DKG already completed")
-	}
-	if status != "ready" && status != "proposed" {
-		return fmt.Errorf("DKG session not in ready/proposed state, current status: %s", status)
-	}
-
-	// Get members list to verify caller is a member
-	membersRaw, _ := dkgSession["members"].([]interface{})
-	members := make([]string, 0, len(membersRaw))
-	for _, m := range membersRaw {
-		if s, ok := m.(string); ok {
-			members = append(members, s)
-		}
-	}
-
-	if !contains(members, nodeID) {
-		return fmt.Errorf("node %s is not a member of this DKG session", nodeID)
-	}
-
-	// Record/verify proposed public key
-	existingPubKey, _ := dkgSession["publicKey"].(string)
-	if existingPubKey == "" {
-		dkgSession["publicKey"] = publicKey
-	} else if existingPubKey != publicKey {
-		return fmt.Errorf("public key mismatch for DKG completion proposal")
-	}
-
-	// Track completion acknowledgements (all members must acknowledge)
-	completionAckedRaw, _ := dkgSession["completionAckedBy"].([]interface{})
-	completionAckedBy := make([]string, 0, len(completionAckedRaw))
-	for _, a := range completionAckedRaw {
-		if s, ok := a.(string); ok {
-			completionAckedBy = append(completionAckedBy, s)
-		}
-	}
-	if !contains(completionAckedBy, nodeID) {
-		completionAckedBy = append(completionAckedBy, nodeID)
-	}
-	dkgSession["completionAckedBy"] = completionAckedBy
-	dkgSession["completionAckCount"] = len(completionAckedBy)
-
-	// Require all members to acknowledge the proposed public key
-	if len(completionAckedBy) < len(members) {
-		if status == "ready" {
-			dkgSession["status"] = "proposed"
-		}
-		updatedBytes, err := json.Marshal(dkgSession)
-		if err != nil {
-			return err
-		}
-		if err := ctx.GetStub().PutState(dkgKey, updatedBytes); err != nil {
-			return err
-		}
-		// Emit proposal event
-		eventPayload := map[string]interface{}{
-			"epoch":         epochStr,
-			"publicKey":     dkgSession["publicKey"],
-			"ackCount":      len(completionAckedBy),
-			"requiredAcks":  len(members),
-			"action":        "dkg_completion_proposed",
-		}
-		if eventBytes, err := json.Marshal(eventPayload); err == nil {
-			ctx.GetStub().SetEvent("DKGCompletionProposed", eventBytes)
-		}
-		return nil
-	}
-
-	// All members acknowledged: mark DKG as completed
-	dkgSession["status"] = "completed"
-	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
-	completedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
-	dkgSession["completedAt"] = completedAt
-
-	// Save updated DKG session
-	updatedBytes, err := json.Marshal(dkgSession)
-	if err != nil {
-		return err
-	}
-	if err := ctx.GetStub().PutState(dkgKey, updatedBytes); err != nil {
-		return err
-	}
-
-	// Update the CA with the public key
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
-	ca.PublicKey = publicKey
-	ca.PartySalt = ""
-	caBytes, err := json.Marshal(ca)
-	if err != nil {
-		return err
-	}
-	if err := ctx.GetStub().PutState("CA:"+DefaultCAID, caBytes); err != nil {
-		return err
-	}
-
-	// Emit completion event
-	eventPayload := map[string]interface{}{
-		"epoch":     epochStr,
-		"action":    "dkg_completed",
-		"publicKey": publicKey,
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("DKGCompleted", eventBytes)
-
-	return nil
-}
-
-// ===================== CSR SUBMISSION & VOTING =====================
-// =================================================================
-// =================================================================
-
-func (c *DecentralizedPKIContract) SubmitCSR(
-	ctx contractapi.TransactionContextInterface,
-	proposalID string,
-	csrPEM string,
-) error {
-	memberID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	exists, err := c.ProposalExists(ctx, proposalID)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("proposal %s already exists", proposalID)
-	}
-
-	if len(csrPEM) < 100 {
-		return fmt.Errorf("invalid CSR format")
-	}
-
-	// prevent duplicate active certificate per identity
-	activeCertKey, _ := ctx.GetStub().GetState("ACTIVECERT:" + memberID)
-	if activeCertKey != nil {
-		certJSON, _ := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
-		if certJSON != nil {
-			var existingCert Certificate
-			if err := json.Unmarshal(certJSON, &existingCert); err == nil {
-				if !existingCert.IsRevoked {
-					return fmt.Errorf("identity already has an active certificate (revoke it first)")
-				}
-			}
-		}
-	}
-
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return fmt.Errorf("failed to get transaction timestamp: %v", err)
-	}
-	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-	votingEndsAt := submittedAt.AddDate(0, 0, ca.GovernanceParams.VotingPeriodDays)
-
-	proposal := CSRProposal{
-		ProposalID:   proposalID,
-		MemberID:     memberID,
-		CSRData:      csrPEM,
-		SubmittedAt:  submittedAt,
-		VotingEndsAt: votingEndsAt,
-		Status:       "pending",
-		VotesFor:     0,
-		VotesAgainst: 0,
-		VotersList:   []string{},
-	}
-
-	proposalJSON, _ := json.Marshal(proposal)
-
-	eventPayload := map[string]string{
-		"proposalId": proposalID,
-		"memberId":   memberID,
-		"action":     "csr_submitted",
-	}
-	ev, _ := json.Marshal(eventPayload)
-	_ = ctx.GetStub().SetEvent("CSRSubmitted", ev)
-
-	return ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON)
-}
-
-func (c *DecentralizedPKIContract) VoteOnCSR(
-	ctx contractapi.TransactionContextInterface,
-	proposalID string,
-	decision string, // "approve" or "reject"
-	rationale string,
-) error {
-	// Get voter identity
-	voterID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get voter identity: %v", err)
-	}
-
-	// Authorization is checked below via CA membership (contains(ca.Members, voterID)).
-	// Certificate revocation does NOT revoke CA membership - those are separate.
-
-	// Validate decision
-	if decision != "approve" && decision != "reject" {
-		return fmt.Errorf("invalid decision: must be 'approve' or 'reject'")
-	}
-
-	// Get proposal
-	proposal, err := c.GetCSRProposal(ctx, proposalID)
-	if err != nil {
-		return err
-	}
-
-	// Check if voting period ended
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return fmt.Errorf("failed to get transaction timestamp: %v", err)
-	}
-	currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-
-	if currentTime.After(proposal.VotingEndsAt) {
-		return fmt.Errorf("voting period has ended")
-	}
-
-	// Check if already voted
-	if contains(proposal.VotersList, voterID) {
-		return fmt.Errorf("voter %s has already voted", voterID)
-	}
-
-	// Verify voter is authorized
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-	totalAuthorized := len(ca.Members)
-	if totalAuthorized == 0 {
-		return fmt.Errorf("no members in CA")
-	}
-
-	if !contains(ca.Members, voterID) {
-		return fmt.Errorf("voter %s is not authorized", voterID)
-	}
-
-	// Record vote
-	vote := Vote{
-		VoterID:   voterID,
-		Decision:  decision,
-		Timestamp: currentTime,
-		Rationale: rationale,
-	}
-
-	voteJSON, err := json.Marshal(vote)
-	if err != nil {
-		return err
-	}
-
-	// Store individual vote
-	voteKey := fmt.Sprintf("VOTE:%s:%s", proposalID, voterID)
-	if err := ctx.GetStub().PutState(voteKey, voteJSON); err != nil {
-		return err
-	}
-
-	// Update proposal vote counts
-	proposal.VotersList = append(proposal.VotersList, voterID)
-	if decision == "approve" {
-		proposal.VotesFor++
-	} else {
-		proposal.VotesAgainst++
-	}
-
-	// Check if quorum reached
-	votesReceived := len(proposal.VotersList)
-	quorumReached := (votesReceived * 100 / totalAuthorized) >= ca.GovernanceParams.QuorumPercentage
-
-	if quorumReached {
-		// SECURITY: Check multi-org voting requirement before execution
-		if err := validateMultiOrgVotes(proposal.VotersList); err != nil {
-			// Not enough org diversity yet, save vote and wait for more
-			proposalJSON, _ := json.Marshal(proposal)
-			return ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON)
-		}
-
-		// Check if approved
-		approvalPercentage := proposal.VotesFor * 100 / votesReceived
-		if approvalPercentage >= ca.GovernanceParams.ApprovalThreshold {
-			proposal.Status = "approved"
-
-			// Automatically initiate signing session
-			if err := c.initiateSigningSession(ctx, proposal); err != nil {
-				return err
-			}
-		} else {
-			proposal.Status = "rejected"
-		}
-	}
-
-	// Save updated proposal
-	proposalJSON, err := json.Marshal(proposal)
-	if err != nil {
-		return err
-	}
-
-	return ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON)
-}
-
-// ===================== TSS SIGNING COORDINATION =====================
-// =================================================================
-// =================================================================
-
-func (c *DecentralizedPKIContract) initiateSigningSession(
-	ctx contractapi.TransactionContextInterface,
-	proposal *CSRProposal,
-) error {
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
-	// Hash the CSR for signing
-	csrHash := sha256.Sum256([]byte(proposal.CSRData))
-	csrHashHex := hex.EncodeToString(csrHash[:])
-
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return err
-	}
-	createdAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-
-	session := SigningSession{
-		ProposalID:        proposal.ProposalID,
-		CSRHash:           csrHashHex,
-		RequiredSigners:   ca.ThresholdParams.Threshold,
-		PartialSignatures: []PartialSignature{},
-		Status:            "active",
-		CreatedAt:         createdAt,
-	}
-
-	sessionJSON, err := json.Marshal(session)
-	if err != nil {
-		return err
-	}
-
-	if err := ctx.GetStub().PutState("SIGNING:"+proposal.ProposalID, sessionJSON); err != nil {
-		return err
-	}
-
-	// Emit event for nodes to start TSS signing
-	eventPayload := map[string]string{
-		"proposalId": proposal.ProposalID,
-		"csrHash":    csrHashHex,
-		"action":     "signing_initiated",
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("SigningInitiated", eventBytes)
-
-	return nil
-}
-
-func (c *DecentralizedPKIContract) SubmitPartialSignature(
-	ctx contractapi.TransactionContextInterface,
-	proposalID string,
-	partialSig string,
-	signerIndex int,
-	publicKeyShare string,
-) error {
-	// Get signer identity
-	signerID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get signer identity: %v", err)
-	}
-
-	// Verify signer is authorized
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
-	if !contains(ca.Members, signerID) {
-		return fmt.Errorf("signer %s is not authorized", signerID)
-	}
-
-	// Get signing session
-	sessionJSON, err := ctx.GetStub().GetState("SIGNING:" + proposalID)
-	if err != nil {
-		return err
-	}
-	if sessionJSON == nil {
-		return fmt.Errorf("signing session not found for proposal %s", proposalID)
-	}
-
-	var session SigningSession
-	if err := json.Unmarshal(sessionJSON, &session); err != nil {
-		return err
-	}
-
-	if session.Status != "active" {
-		return fmt.Errorf("signing session is not active")
-	}
-
-	// Check if already submitted
-	for _, sig := range session.PartialSignatures {
-		if sig.SignerID == signerID {
-			return fmt.Errorf("signer %s already submitted signature", signerID)
-		}
-	}
-
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return err
-	}
-	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-
-	// Add partial signature
-	partialSignature := PartialSignature{
-		SignerID:       signerID,
-		PartialSig:     partialSig,
-		SignerIndex:    signerIndex,
-		SubmittedAt:    submittedAt,
-		PublicKeyShare: publicKeyShare,
-	}
-
-	session.PartialSignatures = append(session.PartialSignatures, partialSignature)
-
-	// Check if threshold reached
-	if len(session.PartialSignatures) >= session.RequiredSigners {
-		session.Status = "completed"
-
-		// Emit event for signature combination
-		eventPayload := map[string]interface{}{
-			"proposalId":      proposalID,
-			"signaturesCount": len(session.PartialSignatures),
-			"action":          "threshold_reached",
-		}
-		eventBytes, _ := json.Marshal(eventPayload)
-		ctx.GetStub().SetEvent("ThresholdReached", eventBytes)
-	}
-
-	// Save updated session
-	sessionJSON, err = json.Marshal(session)
-	if err != nil {
-		return err
-	}
-
-	return ctx.GetStub().PutState("SIGNING:"+proposalID, sessionJSON)
-}
-
-// RegisterCombinedCertificateWithSignature registers a certificate with explicit TSS signature components
-func (c *DecentralizedPKIContract) RegisterCombinedCertificateWithSignature(
-	ctx contractapi.TransactionContextInterface,
-	proposalID string,
-	certificatePEM string,
-	certificateHash string,
-	subject string,
-	publicKey string,
-	serialNumber string,
-	validityDays int,
-	signatureR string,
-	signatureS string,
-) error {
-	// Get signing session
-	sessionJSON, err := ctx.GetStub().GetState("SIGNING:" + proposalID)
-	if err != nil {
-		return err
-	}
-	if sessionJSON == nil {
-		return fmt.Errorf("signing session not found")
-	}
-
-	var session SigningSession
-	if err := json.Unmarshal(sessionJSON, &session); err != nil {
-		return err
-	}
-
-	if session.Status != "completed" {
-		return fmt.Errorf("signing session not completed yet")
-	}
-
-	// Get proposal
-	proposal, err := c.GetCSRProposal(ctx, proposalID)
-	if err != nil {
-		return err
-	}
-
-	// Validate certificate hash
-	if len(certificateHash) != 64 {
-		return fmt.Errorf("invalid certificate hash")
-	}
-
-	// Verify TSS signature if provided
-	if signatureR != "" && signatureS != "" {
-		valid, verifyErr := c.verifyTSSSignature(ctx, session.CSRHash, signatureR, signatureS)
-		if verifyErr != nil {
-			return fmt.Errorf("signature verification error: %w", verifyErr)
-		}
-		if !valid {
-			return fmt.Errorf("invalid TSS signature")
-		}
-	}
-
-	// Get CA
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return err
-	}
-
-	issuedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-	expiresAt := issuedAt.AddDate(0, 0, validityDays)
-
-	// Create certificate record (keyed by proposalID to preserve history)
-	cert := Certificate{
-		CertID:           "CERT:" + proposalID,
-		MemberID:         proposal.MemberID,
-		CertificatePEM:   certificatePEM,
-		CertificateHash:  certificateHash,
-		Subject:          subject,
-		PublicKey:        publicKey,
-		SerialNumber:     serialNumber,
-		IssuedAt:         issuedAt,
-		ExpiresAt:        expiresAt,
-		Status:           "active",
-		IsRevoked:        false,
-		RevokedAt:        "",
-		RevocationReason: "NOT_REVOKED",
-		ProposalID:       proposalID,
-		Epoch:            ca.Epoch,
-		SignatureR:       signatureR,
-		SignatureS:       signatureS,
-	}
-
-	certJSON, err := json.Marshal(cert)
-	if err != nil {
-		return err
-	}
-
-	// Store certificate keyed by proposalID (preserves revoked certs)
-	if err := ctx.GetStub().PutState("CERT:"+proposalID, certJSON); err != nil {
-		return err
-	}
-
-	// Update active cert index for this member
-	if err := ctx.GetStub().PutState("ACTIVECERT:"+proposal.MemberID, []byte(proposalID)); err != nil {
-		return err
-	}
-
-	// Update proposal status
-	proposal.Status = "completed"
-	proposalJSON, err := json.Marshal(proposal)
-	if err != nil {
-		return err
-	}
-	if err := ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON); err != nil {
-		return err
-	}
-
-	// NOTE: Certificate registration does NOT add the requester to the CA member list.
-	// CA membership is managed separately via SponsorJoinCA/BootstrapJoinCA.
-	// Certificates are identity credentials; CA membership is a governance role.
-
-	// Update Merkle tree of active certificates
-	if err := c.updateCertificateMerkleTree(ctx, "certificate_registered", cert.CertID, certificateHash, false); err != nil {
-		// Log but don't fail - Merkle tree is supplementary
-		fmt.Printf("Warning: failed to update Merkle tree: %v\n", err)
-	}
-
-	// Emit certificate registered event
-	eventPayload := map[string]string{
-		"nodeId":          proposal.MemberID,
-		"certificateHash": certificateHash,
-		"epoch":           strconv.Itoa(ca.Epoch),
-		"action":          "certificate_registered",
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("CertificateRegistered", eventBytes)
-
-	return nil
-}
-
-// ===================== REVOCATION =====================
-
-func (c *DecentralizedPKIContract) ProposeRevocation(
-	ctx contractapi.TransactionContextInterface,
-	proposalID string,
-	targetMemberID string,
-	reason string,
-) error {
-	if err := ensureCanonicalID(targetMemberID); err != nil {
-		return err
-	}
-	submitterID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
-	// Look up active cert via index
-	activeCertKey, err := ctx.GetStub().GetState("ACTIVECERT:" + targetMemberID)
-	if err != nil {
-		return err
-	}
-	if activeCertKey == nil {
-		return fmt.Errorf("target has no certificate")
-	}
-	certJSON, err := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
-	if err != nil {
-		return err
-	}
-	if certJSON == nil {
-		return fmt.Errorf("target has no certificate")
-	}
-
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return err
-	}
-	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-	votingEndsAt := submittedAt.AddDate(0, 0, ca.GovernanceParams.VotingPeriodDays)
-
-	revocation := RevocationProposal{
-		ProposalID:     proposalID,
-		TargetMemberID: targetMemberID,
-		Reason:         reason,
-		SubmittedBy:    submitterID,
-		SubmittedAt:    submittedAt,
-		VotingEndsAt:   votingEndsAt,
-		Status:         "pending",
-		VotesFor:       0,
-		VotesAgainst:   0,
-		VotersList:     []string{},
-	}
-
-	revocationJSON, err := json.Marshal(revocation)
-	if err != nil {
-		return err
-	}
-
-	// Emit event
-	eventPayload := map[string]string{
-		"proposalId": proposalID,
-		"nodeId":     targetMemberID,
-		"reason":     reason,
-		"action":     "revocation_proposed",
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("RevocationProposed", eventBytes)
-
-	return ctx.GetStub().PutState("REVOKE:"+proposalID, revocationJSON)
-}
-
-func (c *DecentralizedPKIContract) VoteOnRevocation(
-	ctx contractapi.TransactionContextInterface,
-	proposalID string,
-	decision string,
-	rationale string,
-) error {
-	voterID, err := c.canonicalMemberID(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Authorization is checked below via CA membership.
-	// Certificate revocation does NOT revoke CA membership.
-
-	if decision != "approve" && decision != "reject" {
-		return fmt.Errorf("invalid decision")
-	}
-
-	// Get revocation proposal
-	revocationJSON, err := ctx.GetStub().GetState("REVOKE:" + proposalID)
-	if err != nil {
-		return err
-	}
-	if revocationJSON == nil {
-		return fmt.Errorf("revocation proposal not found")
-	}
-
-	var revocation RevocationProposal
-	if err := json.Unmarshal(revocationJSON, &revocation); err != nil {
-		return err
-	}
-
-	// Check voting period
-	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return err
-	}
-	currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
-
-	if currentTime.After(revocation.VotingEndsAt) {
-		return fmt.Errorf("voting period ended")
-	}
-
-	// Check if already voted
-	if contains(revocation.VotersList, voterID) {
-		return fmt.Errorf("already voted")
-	}
-
-	// Verify voter is authorized
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-	totalAuthorized := len(ca.Members)
-	if totalAuthorized == 0 {
-		return fmt.Errorf("no members in CA")
-	}
-	if !contains(ca.Members, voterID) {
-		return fmt.Errorf("voter not authorized")
-	}
-
-	// Record vote
-	vote := Vote{
-		VoterID:   voterID,
-		Decision:  decision,
-		Timestamp: currentTime,
-		Rationale: rationale,
-	}
-
-	voteJSON, err := json.Marshal(vote)
-	if err != nil {
-		return err
-	}
-
-	voteKey := fmt.Sprintf("REVOKEVOTE:%s:%s", proposalID, voterID)
-	if err := ctx.GetStub().PutState(voteKey, voteJSON); err != nil {
-		return err
-	}
-
-	// Update counts
-	revocation.VotersList = append(revocation.VotersList, voterID)
-	if decision == "approve" {
-		revocation.VotesFor++
-	} else {
-		revocation.VotesAgainst++
-	}
-
-	// Check quorum
-	votesReceived := len(revocation.VotersList)
-	quorumReached := (votesReceived * 100 / totalAuthorized) >= ca.GovernanceParams.QuorumPercentage
-
-	if quorumReached {
-		approvalPercentage := revocation.VotesFor * 100 / votesReceived
-		if approvalPercentage >= ca.GovernanceParams.ApprovalThreshold {
-			revocation.Status = "approved"
-
-			// Execute revocation immediately
-			if err := c.executeRevocation(ctx, &revocation); err != nil {
-				return err
-			}
-		} else {
-			revocation.Status = "rejected"
-		}
-	}
-
-	revocationJSON, err = json.Marshal(revocation)
-	if err != nil {
-		return err
-	}
-
-	return ctx.GetStub().PutState("REVOKE:"+proposalID, revocationJSON)
-}
-
-func (c *DecentralizedPKIContract) executeRevocation(
-	ctx contractapi.TransactionContextInterface,
-	revocation *RevocationProposal,
-) error {
-	// Look up active cert via index
-	activeCertKey, err := ctx.GetStub().GetState("ACTIVECERT:" + revocation.TargetMemberID)
-	if err != nil {
-		return err
-	}
-	if activeCertKey == nil {
-		return fmt.Errorf("no active certificate for member")
-	}
-
-	certJSON, err := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
-	if err != nil {
-		return err
-	}
-
-	var cert Certificate
-	if err := json.Unmarshal(certJSON, &cert); err != nil {
-		return err
-	}
-
-	// Mark as revoked
-	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
-	revokedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
-
-	cert.IsRevoked = true
-	cert.Status = "revoked"
-	cert.RevokedAt = revokedAt
-
-	reason := revocation.Reason
-	cert.RevocationReason = reason
-
-	certJSON, err = json.Marshal(cert)
-	if err != nil {
-		return err
-	}
-	// Store revoked cert at its original key (CERT:<proposalID>)
-	if err := ctx.GetStub().PutState("CERT:"+string(activeCertKey), certJSON); err != nil {
-		return err
-	}
-
-	// Clear active cert index — allows member to request a new certificate
-	if err := ctx.GetStub().DelState("ACTIVECERT:" + revocation.TargetMemberID); err != nil {
-		return err
-	}
-
-	// Update Merkle tree of active certificates (revoked cert removed)
-	if err := c.updateCertificateMerkleTree(ctx, "certificate_revoked", cert.CertID, cert.CertificateHash, true); err != nil {
-		fmt.Printf("Warning: failed to update Merkle tree after revocation: %v\n", err)
-	}
-
-	// Update revocation status
-	revocation.Status = "executed"
-
-	// NOTE: Certificate revocation does NOT remove the member from the CA.
-	// Member removal is a separate governance action via ProposeRemoveMember/VoteOnRemoveMember.
-	// This decouples certificate lifecycle from CA membership.
-
-	// Emit event
-	ca, _ := c.GetDistributedCA(ctx, DefaultCAID)
-	epochStr := "0"
-	if ca != nil {
-		epochStr = strconv.Itoa(ca.Epoch)
-	}
-	eventPayload := map[string]string{
-		"nodeId": revocation.TargetMemberID,
-		"reason": revocation.Reason,
-		"epoch":  epochStr,
-		"action": "certificate_revoked",
-	}
-	eventBytes, _ := json.Marshal(eventPayload)
-	ctx.GetStub().SetEvent("NodeRevoked", eventBytes)
-
-	return nil
 }
 
 // ===================== MEMBER REMOVAL =====================
 
+// opens governance to remove a CA member
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) ProposeRemoveMember(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -2258,6 +707,12 @@ func (c *DecentralizedPKIContract) ProposeRemoveMember(
 
 	ca, err := c.GetDistributedCA(ctx, caId)
 	if err != nil {
+		return err
+	}
+	if err := c.assertNoActiveKeySession(ctx, "submit member removal proposal"); err != nil {
+		return err
+	}
+	if err := c.assertNoPendingMembershipGovernance(ctx, caId, "submit member removal proposal"); err != nil {
 		return err
 	}
 	if !contains(ca.Members, submitterID) {
@@ -2301,18 +756,28 @@ func (c *DecentralizedPKIContract) ProposeRemoveMember(
 	}
 
 	proposalJSON, _ := json.Marshal(proposal)
+	tracker := newStorageAttributionTracker("removal", "member_removal_proposed", proposalID, strconv.Itoa(ca.Epoch))
+	tracker.trackWrite("proposal", proposalJSON)
 
-	eventPayload := map[string]string{
-		"proposalId": proposalID,
-		"target":     targetMemberID,
-		"action":     "member_removal_proposed",
+	eventPayload := map[string]interface{}{
+		"eventVersion":   2,
+		"workflow":       "removal",
+		"action":         "member_removal_proposed",
+		"proposalId":     proposalID,
+		"caId":           caId,
+		"targetMemberId": targetMemberID,
+		"submitterId":    submitterID,
 	}
+	tracker.applyToEventPayload(ctx, eventPayload)
 	ev, _ := json.Marshal(eventPayload)
 	_ = ctx.GetStub().SetEvent("MemberRemovalProposed", ev)
 
 	return ctx.GetStub().PutState(key, proposalJSON)
 }
 
+// records member-removal votes so disruptive membership changes require explicit cross-member approval.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) VoteOnRemoveMember(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -2358,10 +823,14 @@ func (c *DecentralizedPKIContract) VoteOnRemoveMember(
 	if err != nil {
 		return err
 	}
+	if err := c.assertNoActiveKeySession(ctx, "vote on member removal proposal"); err != nil {
+		return err
+	}
 	totalAuthorized := len(ca.Members)
 	if totalAuthorized == 0 {
 		return fmt.Errorf("no members in CA")
 	}
+	tracker := newStorageAttributionTracker("removal", "member_removal_voted", proposalID, strconv.Itoa(ca.Epoch))
 	if !contains(ca.Members, voterID) {
 		return fmt.Errorf("voter not authorized")
 	}
@@ -2373,6 +842,7 @@ func (c *DecentralizedPKIContract) VoteOnRemoveMember(
 		Rationale: rationale,
 	}
 	voteJSON, _ := json.Marshal(vote)
+	tracker.trackWrite("vote", voteJSON)
 	voteKey := fmt.Sprintf("REMOVEVOTE:%s:%s:%s", caId, proposalID, voterID)
 	if err := ctx.GetStub().PutState(voteKey, voteJSON); err != nil {
 		return err
@@ -2384,9 +854,27 @@ func (c *DecentralizedPKIContract) VoteOnRemoveMember(
 	} else {
 		proposal.VotesAgainst++
 	}
+	voteEvent := map[string]interface{}{
+		"eventVersion":   2,
+		"workflow":       "removal",
+		"action":         "member_removal_voted",
+		"proposalId":     proposalID,
+		"caId":           caId,
+		"targetMemberId": proposal.TargetMemberID,
+		"voterId":        voterID,
+		"decision":       decision,
+		"votesFor":       proposal.VotesFor,
+		"votesAgainst":   proposal.VotesAgainst,
+	}
+	proposalBytesForStorage, _ := json.Marshal(proposal)
+	tracker.trackWrite("proposal", proposalBytesForStorage)
+	tracker.applyToEventPayload(ctx, voteEvent)
+	if eventBytes, err := json.Marshal(voteEvent); err == nil {
+		_ = ctx.GetStub().SetEvent("MemberRemovalVoted", eventBytes)
+	}
 
 	votesReceived := len(proposal.VotersList)
-	quorumReached := (votesReceived * 100 / totalAuthorized) >= ca.GovernanceParams.QuorumPercentage
+	quorumReached := hasNetworkWideApproval(votesReceived, totalAuthorized, ca.GovernanceParams.QuorumPercentage)
 
 	if quorumReached {
 		if err := validateMultiOrgVotes(proposal.VotersList); err != nil {
@@ -2394,14 +882,18 @@ func (c *DecentralizedPKIContract) VoteOnRemoveMember(
 			return ctx.GetStub().PutState(key, proposalJSON)
 		}
 
-		approvalPercentage := proposal.VotesFor * 100 / votesReceived
-		if approvalPercentage >= ca.GovernanceParams.ApprovalThreshold {
+		if hasNetworkWideApproval(proposal.VotesFor, totalAuthorized, ca.GovernanceParams.ApprovalThreshold) {
 			proposal.Status = "approved"
 			if err := c.executeMemberRemoval(ctx, caId, &proposal); err != nil {
 				return err
 			}
 			proposal.Status = "executed"
-		} else {
+		} else if !canStillReachNetworkWideApproval(
+			proposal.VotesFor,
+			votesReceived,
+			totalAuthorized,
+			ca.GovernanceParams.ApprovalThreshold,
+		) {
 			proposal.Status = "rejected"
 		}
 	}
@@ -2410,11 +902,18 @@ func (c *DecentralizedPKIContract) VoteOnRemoveMember(
 	return ctx.GetStub().PutState(key, proposalJSON)
 }
 
+// applies an approved member removal and triggers reshare prerequisites so threshold remains valid after membership change.
+// Called by: (*DecentralizedPKIContract).VoteOnRemoveMember.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func (c *DecentralizedPKIContract) executeMemberRemoval(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
 	proposal *MemberRemovalProposal,
 ) error {
+	tracker := newStorageAttributionTracker("removal", "member_removed", proposal.ProposalID, "")
+	if err := c.assertNoActiveKeySession(ctx, "execute member removal"); err != nil {
+		return err
+	}
 	ca, err := c.GetDistributedCA(ctx, caId)
 	if err != nil {
 		return err
@@ -2428,7 +927,8 @@ func (c *DecentralizedPKIContract) executeMemberRemoval(
 
 	oldMembers := append([]string(nil), ca.Members...)
 	oldThreshold := ca.ThresholdParams.Threshold
-	// Exclude the removed member from the old committee so a malicious/offline node
+
+	// Exclude the removed member from the old committee
 	// cannot block reshare if t+1 is still achievable.
 	oldReshareMembers := make([]string, 0, len(oldMembers)-1)
 	for _, member := range oldMembers {
@@ -2448,15 +948,6 @@ func (c *DecentralizedPKIContract) executeMemberRemoval(
 	}
 	ca.Members = newMembers
 
-	// Remove from observers if present
-	newObservers := make([]string, 0, len(ca.Observers))
-	for _, obs := range ca.Observers {
-		if obs != proposal.TargetMemberID {
-			newObservers = append(newObservers, obs)
-		}
-	}
-	ca.Observers = newObservers
-
 	ca.Epoch++
 	ca.ThresholdParams.TotalNodes = len(ca.Members)
 	ca.ThresholdParams.Threshold = calculateDynamicThreshold(
@@ -2465,6 +956,8 @@ func (c *DecentralizedPKIContract) executeMemberRemoval(
 	)
 
 	caJSON, _ := json.Marshal(ca)
+	tracker.epoch = strconv.Itoa(ca.Epoch)
+	tracker.trackWrite("ca_state", caJSON)
 	if err := ctx.GetStub().PutState("CA:"+caId, caJSON); err != nil {
 		return err
 	}
@@ -2472,20 +965,28 @@ func (c *DecentralizedPKIContract) executeMemberRemoval(
 	if err := c.initiateReshare(ctx, ca.Epoch, "member_removed", proposal.TargetMemberID, oldReshareMembers, oldThreshold, ca.Members, ca.ThresholdParams.Threshold); err != nil {
 		return err
 	}
+	reshareState, _ := ctx.GetStub().GetState("RESHARE:" + strconv.Itoa(ca.Epoch))
+	tracker.trackWrite("reshare_state", reshareState)
 
 	eventPayload := map[string]interface{}{
-		"caId":   caId,
-		"member": proposal.TargetMemberID,
-		"epoch":  ca.Epoch,
-		"action": "member_removed",
+		"eventVersion":   2,
+		"workflow":       "removal",
+		"action":         "member_removed",
+		"proposalId":     proposal.ProposalID,
+		"caId":           caId,
+		"targetMemberId": proposal.TargetMemberID,
+		"epoch":          ca.Epoch,
 	}
+	tracker.applyToEventPayload(ctx, eventPayload)
 	eventBytes, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("MemberRemoved", eventBytes)
 
 	return nil
 }
 
-// ListPendingRemoveMemberProposals lists pending member removal proposals for a CA.
+// lists Pending Remove Member Proposals from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) ListPendingRemoveMemberProposals(
 	ctx contractapi.TransactionContextInterface,
 	caId string,
@@ -2517,8 +1018,1462 @@ func (c *DecentralizedPKIContract) ListPendingRemoveMemberProposals(
 	return string(result), nil
 }
 
+// ===================== CSR SUBMISSION & VOTING =====================
+
+// validates and stores a CSR proposal so certificate issuance starts from an authenticated request with proof-of-possession.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) SubmitCSR(
+	ctx contractapi.TransactionContextInterface,
+	proposalID string,
+	csrPEM string,
+) error {
+	memberID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	cert, certPEM, err := getClientCert(ctx)
+	if err != nil {
+		return err
+	}
+	role, err := getClientRole(ctx, cert)
+	if err != nil {
+		return err
+	}
+
+	exists, err := c.ProposalExists(ctx, proposalID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("proposal %s already exists", proposalID)
+	}
+
+	if len(csrPEM) < 100 {
+		return fmt.Errorf("invalid CSR format")
+	}
+	csrBlock, _ := pem.Decode([]byte(csrPEM))
+	if csrBlock == nil {
+		return fmt.Errorf("invalid CSR PEM encoding")
+	}
+	csr, err := x509.ParseCertificateRequest(csrBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("invalid CSR parse: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return fmt.Errorf("invalid CSR signature: %w", err)
+	}
+
+	// prevent duplicate active certificate per identity
+	activeCertKey, _ := ctx.GetStub().GetState("ACTIVECERT:" + memberID)
+	if activeCertKey != nil {
+		certJSON, _ := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
+		if certJSON != nil {
+			var existingCert Certificate
+			if err := json.Unmarshal(certJSON, &existingCert); err == nil {
+				if !existingCert.IsRevoked {
+					return fmt.Errorf("identity already has an active certificate (revoke it first)")
+				}
+			}
+		}
+	}
+
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get transaction timestamp: %v", err)
+	}
+	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+	votingEndsAt := submittedAt.AddDate(0, 0, ca.GovernanceParams.VotingPeriodDays)
+
+	if err := validateCertAtTime(cert, submittedAt); err != nil {
+		return err
+	}
+	// Actual proposal
+	proposal := CSRProposal{
+		ProposalID:    proposalID,
+		SubmitterID:   memberID,
+		CSRData:       csrPEM,
+		SubmitterRole: role,
+		SubmitterCert: certPEM,
+		SubmittedAt:   submittedAt,
+		VotingEndsAt:  votingEndsAt,
+		Status:        "pending",
+		VotesFor:      0,
+		VotesAgainst:  0,
+		VotersList:    []string{},
+	}
+
+	proposalJSON, _ := json.Marshal(proposal)
+	tracker := newStorageAttributionTracker("csr", "csr_submitted", proposalID, strconv.Itoa(ca.Epoch))
+	tracker.trackWrite("proposal", proposalJSON)
+
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "csr",
+		"action":       "csr_submitted",
+		"proposalId":   proposalID,
+		"submitterId":  memberID,
+	}
+	tracker.applyToEventPayload(ctx, eventPayload)
+	ev, _ := json.Marshal(eventPayload)
+	_ = ctx.GetStub().SetEvent("CSRSubmitted", ev)
+
+	return ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON)
+}
+
+// records governance votes for CSR proposals so certificate signing only starts after policy-compliant approval.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) VoteOnCSR(
+	ctx contractapi.TransactionContextInterface,
+	proposalID string,
+	decision string, // "approve"/"reject"
+	rationale string,
+) error {
+
+	// Get voter identity
+	voterID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get voter identity: %v", err)
+	}
+	// Validate decision
+	if decision != "approve" && decision != "reject" {
+		return fmt.Errorf("invalid decision: must be 'approve' or 'reject'")
+	}
+
+	// Get proposal
+	proposal, err := c.GetCSRProposal(ctx, proposalID)
+	if err != nil {
+		return err
+	}
+	if proposal.Status != "pending" {
+		return fmt.Errorf("CSR proposal %s is not pending (status=%s)", proposalID, proposal.Status)
+	}
+
+	// Check if voting period ended
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get transaction timestamp: %v", err)
+	}
+	currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	if currentTime.After(proposal.VotingEndsAt) {
+		return fmt.Errorf("voting period has ended")
+	}
+
+	// Check if already voted
+	if contains(proposal.VotersList, voterID) {
+		return fmt.Errorf("voter %s has already voted", voterID)
+	}
+
+	// Verify voter is authorized (CA-Member)
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+	totalAuthorized := len(ca.Members)
+	if totalAuthorized == 0 {
+		return fmt.Errorf("no members in CA")
+	}
+	tracker := newStorageAttributionTracker("csr", "csr_voted", proposalID, strconv.Itoa(ca.Epoch))
+
+	if !contains(ca.Members, voterID) {
+		return fmt.Errorf("voter %s is not authorized", voterID)
+	}
+
+	if decision == "approve" {
+		submitterCert, err := parseCertFromPEM(proposal.SubmitterCert)
+		if err != nil {
+			return fmt.Errorf("proposal missing valid submitter certificate: %v", err)
+		}
+		if err := validateCertAtTime(submitterCert, currentTime); err != nil {
+			return err
+		}
+		role := strings.ToLower(strings.TrimSpace(proposal.SubmitterRole))
+		if role == "" {
+			role = roleFromCert(submitterCert)
+		}
+		if role != "observer" && role != "member" {
+			return fmt.Errorf("submitter role not authorized for CSR approval")
+		}
+	}
+
+	// Record vote
+	vote := Vote{
+		VoterID:   voterID,
+		Decision:  decision,
+		Timestamp: currentTime,
+		Rationale: rationale,
+	}
+
+	voteJSON, err := json.Marshal(vote)
+	if err != nil {
+		return err
+	}
+	tracker.trackWrite("vote", voteJSON)
+
+	// Store vote
+	voteKey := fmt.Sprintf("VOTE:%s:%s", proposalID, voterID)
+	if err := ctx.GetStub().PutState(voteKey, voteJSON); err != nil {
+		return err
+	}
+
+	// Update proposal vote counts
+	proposal.VotersList = append(proposal.VotersList, voterID)
+	if decision == "approve" {
+		proposal.VotesFor++
+	} else {
+		proposal.VotesAgainst++
+	}
+	voteEvent := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "csr",
+		"action":       "csr_voted",
+		"proposalId":   proposalID,
+		"submitterId":  proposal.SubmitterID,
+		"voterId":      voterID,
+		"decision":     decision,
+		"votesFor":     proposal.VotesFor,
+		"votesAgainst": proposal.VotesAgainst,
+	}
+	proposalBytesForStorage, _ := json.Marshal(proposal)
+	tracker.trackWrite("proposal", proposalBytesForStorage)
+	tracker.applyToEventPayload(ctx, voteEvent)
+	if eventBytes, err := json.Marshal(voteEvent); err == nil {
+		_ = ctx.GetStub().SetEvent("CSRVoted", eventBytes)
+	}
+
+	// Check if quorum reached
+	votesReceived := len(proposal.VotersList)
+	quorumReached := hasNetworkWideApproval(votesReceived, totalAuthorized, ca.GovernanceParams.QuorumPercentage)
+
+	if quorumReached {
+		// SECURITY: Check multi-org voting requirement before execution
+		if err := validateMultiOrgVotes(proposal.VotersList); err != nil {
+			// Not enough org diversity yet, save vote and wait for more
+			proposalJSON, _ := json.Marshal(proposal)
+			return ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON)
+		}
+
+		// Approval is evaluated against all authorized members
+		if hasNetworkWideApproval(proposal.VotesFor, totalAuthorized, ca.GovernanceParams.ApprovalThreshold) {
+			proposal.Status = "approved"
+
+			// Automatically initiate signing session
+			if err := c.initiateSigningSession(ctx, proposal); err != nil {
+				return err
+			}
+			signingState, _ := ctx.GetStub().GetState("SIGNING:" + proposalID)
+			tracker.trackWrite("signing_state", signingState)
+		} else if !canStillReachNetworkWideApproval(
+			proposal.VotesFor,
+			votesReceived,
+			totalAuthorized,
+			ca.GovernanceParams.ApprovalThreshold,
+		) {
+			proposal.Status = "rejected"
+		}
+	}
+
+	// Save updated proposal
+	proposalJSON, err := json.Marshal(proposal)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON)
+}
+
+// ===================== REVOCATION =====================
+
+// creates a revocation proposal for an active certificate
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) ProposeRevocation(
+	ctx contractapi.TransactionContextInterface,
+	proposalID string,
+	targetNodeID string,
+	reason string,
+) error {
+	if err := ensureCanonicalID(targetNodeID); err != nil {
+		return err
+	}
+	submitterID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+
+	cert, _, err := getClientCert(ctx)
+	if err != nil {
+		return err
+	}
+	role, err := getClientRole(ctx, cert)
+	if err != nil {
+		return err
+	}
+	if role != "observer" && role != "member" {
+		return fmt.Errorf("certificate role not authorized to propose revocation")
+	}
+
+	// Look up active cert
+	activeCertKey, err := ctx.GetStub().GetState("ACTIVECERT:" + targetNodeID)
+	if err != nil {
+		return err
+	}
+	if activeCertKey == nil {
+		return fmt.Errorf("target has no certificate")
+	}
+	certJSON, err := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
+	if err != nil {
+		return err
+	}
+	if certJSON == nil {
+		return fmt.Errorf("target has no certificate")
+	}
+
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return err
+	}
+	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+	votingEndsAt := submittedAt.AddDate(0, 0, ca.GovernanceParams.VotingPeriodDays)
+
+	if err := validateCertAtTime(cert, submittedAt); err != nil {
+		return err
+	}
+
+	revocation := RevocationProposal{
+		ProposalID:   proposalID,
+		TargetNodeID: targetNodeID,
+		Reason:       reason,
+		SubmittedBy:  submitterID,
+		SubmittedAt:  submittedAt,
+		VotingEndsAt: votingEndsAt,
+		Status:       "pending",
+		VotesFor:     0,
+		VotesAgainst: 0,
+		VotersList:   []string{},
+	}
+
+	revocationJSON, err := json.Marshal(revocation)
+	if err != nil {
+		return err
+	}
+	tracker := newStorageAttributionTracker("revocation", "revocation_proposed", proposalID, strconv.Itoa(ca.Epoch))
+	tracker.trackWrite("proposal", revocationJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "revocation",
+		"action":       "revocation_proposed",
+		"proposalId":   proposalID,
+		"nodeId":       targetNodeID,
+		"reason":       reason,
+		"epoch":        ca.Epoch,
+	}
+	tracker.applyToEventPayload(ctx, eventPayload)
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("RevocationProposed", eventBytes)
+
+	return ctx.GetStub().PutState("REVOKE:"+proposalID, revocationJSON)
+}
+
+// records revocation decisions so certificate invalidation requires quorum-backed approval.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) VoteOnRevocation(
+	ctx contractapi.TransactionContextInterface,
+	proposalID string,
+	decision string,
+	rationale string,
+) error {
+	voterID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	if decision != "approve" && decision != "reject" {
+		return fmt.Errorf("invalid decision")
+	}
+
+	// Get revocation proposal
+	revocationJSON, err := ctx.GetStub().GetState("REVOKE:" + proposalID)
+	if err != nil {
+		return err
+	}
+	if revocationJSON == nil {
+		return fmt.Errorf("revocation proposal not found")
+	}
+
+	var revocation RevocationProposal
+	if err := json.Unmarshal(revocationJSON, &revocation); err != nil {
+		return err
+	}
+
+	// Check voting period
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return err
+	}
+	currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	if currentTime.After(revocation.VotingEndsAt) {
+		return fmt.Errorf("voting period ended")
+	}
+
+	// Check if already voted
+	if contains(revocation.VotersList, voterID) {
+		return fmt.Errorf("already voted")
+	}
+
+	// Verify voter is authorized
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+	totalAuthorized := len(ca.Members)
+	if totalAuthorized == 0 {
+		return fmt.Errorf("no members in CA")
+	}
+	tracker := newStorageAttributionTracker("revocation", "revocation_voted", proposalID, strconv.Itoa(ca.Epoch))
+	if !contains(ca.Members, voterID) {
+		return fmt.Errorf("voter not authorized")
+	}
+
+	// Record vote
+	vote := Vote{
+		VoterID:   voterID,
+		Decision:  decision,
+		Timestamp: currentTime,
+		Rationale: rationale,
+	}
+
+	voteJSON, err := json.Marshal(vote)
+	if err != nil {
+		return err
+	}
+	tracker.trackWrite("vote", voteJSON)
+
+	voteKey := fmt.Sprintf("REVOKEVOTE:%s:%s", proposalID, voterID)
+	if err := ctx.GetStub().PutState(voteKey, voteJSON); err != nil {
+		return err
+	}
+
+	// Update counts
+	revocation.VotersList = append(revocation.VotersList, voterID)
+	if decision == "approve" {
+		revocation.VotesFor++
+	} else {
+		revocation.VotesAgainst++
+	}
+	voteEvent := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "revocation",
+		"action":       "revocation_voted",
+		"proposalId":   proposalID,
+		"nodeId":       revocation.TargetNodeID,
+		"voterId":      voterID,
+		"decision":     decision,
+		"votesFor":     revocation.VotesFor,
+		"votesAgainst": revocation.VotesAgainst,
+	}
+	revocationBytesForStorage, _ := json.Marshal(revocation)
+	tracker.trackWrite("proposal", revocationBytesForStorage)
+	tracker.applyToEventPayload(ctx, voteEvent)
+	if eventBytes, err := json.Marshal(voteEvent); err == nil {
+		_ = ctx.GetStub().SetEvent("RevocationVoted", eventBytes)
+	}
+
+	// Check quorum
+	votesReceived := len(revocation.VotersList)
+	quorumReached := hasNetworkWideApproval(votesReceived, totalAuthorized, ca.GovernanceParams.QuorumPercentage)
+
+	if quorumReached {
+		if hasNetworkWideApproval(revocation.VotesFor, totalAuthorized, ca.GovernanceParams.ApprovalThreshold) {
+			revocation.Status = "approved"
+
+			// Execute revocation immediately
+			if err := c.executeRevocation(ctx, &revocation); err != nil {
+				return err
+			}
+		} else if !canStillReachNetworkWideApproval(
+			revocation.VotesFor,
+			votesReceived,
+			totalAuthorized,
+			ca.GovernanceParams.ApprovalThreshold,
+		) {
+			revocation.Status = "rejected"
+		}
+	}
+
+	revocationJSON, err = json.Marshal(revocation)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState("REVOKE:"+proposalID, revocationJSON)
+}
+
+// marks a certificate revoked and updates related indexes so revocation state is enforceable across queries and checks.
+// Called by: (*DecentralizedPKIContract).VoteOnRevocation.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) executeRevocation(
+	ctx contractapi.TransactionContextInterface,
+	revocation *RevocationProposal,
+) error {
+	tracker := newStorageAttributionTracker("revocation", "certificate_revoked", revocation.ProposalID, "")
+	// Look up active cert
+	activeCertKey, err := ctx.GetStub().GetState("ACTIVECERT:" + revocation.TargetNodeID)
+	if err != nil {
+		return err
+	}
+	if activeCertKey == nil {
+		return fmt.Errorf("no active certificate for member")
+	}
+
+	certJSON, err := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
+	if err != nil {
+		return err
+	}
+
+	var cert Certificate
+	if err := json.Unmarshal(certJSON, &cert); err != nil {
+		return err
+	}
+
+	// Mark as revoked
+	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
+	revokedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
+
+	cert.IsRevoked = true
+	cert.Status = "revoked"
+	cert.RevokedAt = revokedAt
+
+	reason := revocation.Reason
+	cert.RevocationReason = reason
+
+	certJSON, err = json.Marshal(cert)
+	if err != nil {
+		return err
+	}
+	tracker.trackWrite("certificate", certJSON)
+	// Store revoked cert at its original key (CERT:<proposalID>)
+	if err := ctx.GetStub().PutState("CERT:"+string(activeCertKey), certJSON); err != nil {
+		return err
+	}
+
+	// Clear active cert index â€” allows member to request a new certificate
+	tracker.trackDelete("active_index", activeCertKey)
+	if err := ctx.GetStub().DelState("ACTIVECERT:" + revocation.TargetNodeID); err != nil {
+		return err
+	}
+
+	// Update Merkle tree of active certificates (revoked cert removed)
+	if err := c.updateCertificateMerkleTree(ctx, "certificate_revoked", cert.CertID, cert.CertificateHash, true); err != nil {
+		fmt.Printf("Warning: failed to update Merkle tree after revocation: %v\n", err)
+	} else {
+		merkleState, _ := ctx.GetStub().GetState("MERKLE:CERTS")
+		tracker.trackWrite("merkle_state", merkleState)
+	}
+
+	// Update revocation status
+	revocation.Status = "executed"
+
+	// Emit event
+	ca, _ := c.GetDistributedCA(ctx, DefaultCAID)
+	epochStr := "0"
+	if ca != nil {
+		epochStr = strconv.Itoa(ca.Epoch)
+	}
+	tracker.epoch = epochStr
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "revocation",
+		"action":       "certificate_revoked",
+		"proposalId":   revocation.ProposalID,
+		"nodeId":       revocation.TargetNodeID,
+		"reason":       revocation.Reason,
+		"epoch":        epochStr,
+	}
+	tracker.applyToEventPayload(ctx, eventPayload)
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("NodeRevoked", eventBytes)
+
+	return nil
+}
+
+// ===================== CA INITIALIZATION =====================
+
+// creates the root distributed CA state so all later governance and certificate operations share a baseline.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) InitializeDistributedCA(
+	ctx contractapi.TransactionContextInterface,
+	caID string,
+	name string,
+	threshold int,
+	initialPublicKey string,
+) error {
+	exists, err := c.CAExists(ctx, caID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("CA %s already exists", caID)
+	}
+
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get transaction timestamp: %v", err)
+	}
+	createdAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	ca := DistributedCA{
+		CAID:      caID,
+		Name:      name,
+		PublicKey: initialPublicKey,
+		PartySalt: "",
+		ThresholdParams: ThresholdParameters{
+			Threshold:  threshold,
+			TotalNodes: 0,
+			Scheme:     "ECDSA-TSS",
+		},
+		CreatedAt: createdAt,
+		IsActive:  true,
+		Members:   []string{},
+		GovernanceParams: GovernanceParameters{
+			VotingPeriodDays:  7,
+			QuorumPercentage:  51,
+			ApprovalThreshold: 51,
+		},
+	}
+
+	caJSON, err := json.Marshal(ca)
+	if err != nil {
+		return fmt.Errorf("failed to marshal CA: %v", err)
+	}
+
+	return ctx.GetStub().PutState("CA:"+caID, caJSON)
+}
+
+// retrieves trusted CA from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) GetTrustedCA(
+	ctx contractapi.TransactionContextInterface,
+	caID string,
+) (*DistributedCA, error) {
+	return c.GetDistributedCA(ctx, caID)
+}
+
+// adds an initial trusted member and starts key-session orchestration so the CA can become operational
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) BootstrapJoinCA(
+	ctx contractapi.TransactionContextInterface,
+	caID string,
+	bootstrapLimit int,
+) error {
+	memberID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+	cert, _, err := getClientCert(ctx)
+	if err != nil {
+		return err
+	}
+	role, err := getClientRole(ctx, cert)
+	if err != nil {
+		return err
+	}
+	if role != "member" {
+		return fmt.Errorf("certificate role not eligible for bootstrap join")
+	}
+
+	ca, err := c.GetDistributedCA(ctx, caID)
+	if err != nil {
+		return err
+	}
+
+	if contains(ca.Members, memberID) {
+		return nil
+	}
+
+	if len(ca.Members) >= bootstrapLimit {
+		return fmt.Errorf("bootstrap closed: %d members already joined", len(ca.Members))
+	}
+
+	oldMembers := append([]string(nil), ca.Members...)
+	oldThreshold := ca.ThresholdParams.Threshold
+
+	ca.Members = append(ca.Members, memberID)
+	ca.ThresholdParams.TotalNodes = len(ca.Members)
+	ca.ThresholdParams.Threshold = calculateDynamicThreshold(
+		len(ca.Members),
+		ca.GovernanceParams.QuorumPercentage,
+	)
+	ca.Epoch++
+
+	b, _ := json.Marshal(ca)
+	if err := ctx.GetStub().PutState("CA:"+caID, b); err != nil {
+		return err
+	}
+
+	// existing DKG if present
+	existingDKG, _ := ctx.GetStub().GetState("DKG:0")
+	createdDKG := false
+
+	// Start DKG (when not public key set yet and at least two members)
+	if len(ca.Members) >= 2 && ca.PublicKey == "" {
+		// Check existing DKG (to prevent conflicts with multiple sessions)
+		if existingDKG == nil {
+
+			txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
+			initiatedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
+
+			dkgSession := map[string]interface{}{
+				"epoch":       0,
+				"reason":      "initial_dkg",
+				"members":     ca.Members,
+				"threshold":   ca.ThresholdParams.Threshold,
+				"status":      "initiated",
+				"ackCount":    0,
+				"ackedBy":     []string{},
+				"initiatedAt": initiatedAt,
+			}
+
+			sessionJSON, _ := json.Marshal(dkgSession)
+			ctx.GetStub().PutState("DKG:0", sessionJSON)
+
+			// Event with full payload
+			eventPayload := map[string]interface{}{
+				"eventVersion": 2,
+				"workflow":     "dkg",
+				"action":       "dkg_initiated",
+				"epoch":        0,
+				"members":      ca.Members,
+				"threshold":    ca.ThresholdParams.Threshold,
+			}
+			eventBytes, _ := json.Marshal(eventPayload)
+			ctx.GetStub().SetEvent("DKGInitiated", eventBytes)
+			createdDKG = true
+		}
+	}
+
+	// If a session or pub-key exists trigger reshare instead of fresh DKG
+	if !createdDKG && (existingDKG != nil || ca.PublicKey != "") {
+		// Avoid duplicating a reshare for the same epoch
+		reshareKey := "RESHARE:" + strconv.Itoa(ca.Epoch)
+		if existingReshare, _ := ctx.GetStub().GetState(reshareKey); existingReshare == nil {
+			_ = c.initiateReshare(ctx, ca.Epoch, "member_join_bootstrap", memberID, oldMembers, oldThreshold, ca.Members, ca.ThresholdParams.Threshold)
+		}
+	}
+
+	return nil
+}
+
+// ===================== DKG & RESHARE MANAGEMENT =====================
+
+// starts a distributed key-generation session
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) InitiateDKG(
+	ctx contractapi.TransactionContextInterface,
+	caID string,
+) error {
+	memberID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	ca, err := c.GetDistributedCA(ctx, caID)
+	if err != nil {
+		return err
+	}
+
+	// CA member?
+	if !contains(ca.Members, memberID) {
+		return fmt.Errorf("only CA members can initiate DKG")
+	}
+
+	// DKG already present or completed?
+	if ca.PublicKey != "" {
+		return fmt.Errorf("DKG already completed; public key is set")
+	}
+	if dkgStatus, err := c.getActiveDKGStatus(ctx); err != nil {
+		return err
+	} else if dkgStatus != "" {
+		return fmt.Errorf("DKG already in progress with status %s", dkgStatus)
+	}
+	if reshare, err := c.getLatestActiveReshareSession(ctx); err != nil {
+		return err
+	} else if reshare != nil {
+		return fmt.Errorf("cannot initiate DKG while reshare epoch %d is %s", reshare.Epoch, reshare.Status)
+	}
+
+	// Create DKG session (epoch 0 for initial DKG)
+	completionRequiredAcks := len(ca.Members)
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get tx timestamp: %v", err)
+	}
+	initiatedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
+	dkgSession := map[string]interface{}{
+		"epoch":                  0,
+		"reason":                 "initial_dkg",
+		"members":                ca.Members,
+		"threshold":              ca.ThresholdParams.Threshold,
+		"completionRequiredAcks": completionRequiredAcks,
+		"status":                 "initiated",
+		"initiatedAt":            initiatedAt,
+	}
+
+	sessionJSON, err := json.Marshal(dkgSession)
+	if err != nil {
+		return err
+	}
+
+	// Store session
+	if err := ctx.GetStub().PutState("DKG:0", sessionJSON); err != nil {
+		return err
+	}
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "dkg",
+		"action":       "dkg_initiated",
+		"epoch":        0,
+	}
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("DKGInitiated", eventBytes)
+
+	return nil
+}
+
+// rotates into a fresh DKG epoch so the network can recover safely from stale or blocked key-management sessions
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) ForceFreshDKG(
+	ctx contractapi.TransactionContextInterface,
+	caID string,
+	reason string,
+) error {
+	memberID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	ca, err := c.GetDistributedCA(ctx, caID)
+	if err != nil {
+		return err
+	}
+
+	if !contains(ca.Members, memberID) {
+		return fmt.Errorf("only CA members can force a fresh DKG")
+	}
+	if dkgStatus, err := c.getActiveDKGStatus(ctx); err != nil {
+		return err
+	} else if dkgStatus != "" {
+		return fmt.Errorf("cannot force fresh DKG while DKG session is %s", dkgStatus)
+	}
+	if err := c.assertNoPendingMembershipGovernance(ctx, caID, "force fresh DKG"); err != nil {
+		return err
+	}
+
+	if reason == "" {
+		reason = "fresh_dkg"
+	}
+
+	// Override current stuck session
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get tx timestamp: %v", err)
+	}
+	supersedeAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
+	iter, err := ctx.GetStub().GetStateByRange("RESHARE:", "RESHARE;")
+	if err == nil {
+		defer iter.Close()
+		for iter.HasNext() {
+			kv, err := iter.Next()
+			if err != nil {
+				return err
+			}
+			var sess ReshareSession
+			if err := json.Unmarshal(kv.Value, &sess); err != nil {
+				continue
+			}
+			if sess.Status == "completed" || sess.Status == "superseded" {
+				continue
+			}
+			sess.Status = "superseded"
+			sess.CompletedAt = supersedeAt
+			sess.SupersededAt = supersedeAt
+			sess.SupersededBy = ca.Epoch + 1
+			kvBytes, err := json.Marshal(sess)
+			if err == nil {
+				_ = ctx.GetStub().PutState(kv.Key, kvBytes)
+			}
+		}
+	}
+
+	// Reset CA
+	ca.PublicKey = ""
+	ca.PartySalt = ""
+	ca.Epoch++
+	ca.ThresholdParams.TotalNodes = len(ca.Members)
+	ca.ThresholdParams.Threshold = calculateDynamicThreshold(len(ca.Members), ca.GovernanceParams.QuorumPercentage)
+
+	caJSON, _ := json.Marshal(ca)
+	if err := ctx.GetStub().PutState("CA:"+caID, caJSON); err != nil {
+		return err
+	}
+
+	initiatedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
+
+	dkgSession := map[string]interface{}{
+		"epoch":                  0,
+		"reason":                 reason,
+		"members":                ca.Members,
+		"threshold":              ca.ThresholdParams.Threshold,
+		"completionRequiredAcks": len(ca.Members),
+		"status":                 "initiated",
+		"ackCount":               0,
+		"ackedBy":                []string{},
+		"initiatedAt":            initiatedAt,
+	}
+
+	sessionJSON, err := json.Marshal(dkgSession)
+	if err != nil {
+		return err
+	}
+	if err := ctx.GetStub().PutState("DKG:0", sessionJSON); err != nil {
+		return err
+	}
+
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "dkg",
+		"action":       "fresh_dkg_initiated",
+		"epoch":        0,
+		"members":      ca.Members,
+		"threshold":    ca.ThresholdParams.Threshold,
+	}
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("DKGInitiated", eventBytes)
+
+	return nil
+}
+
+// retrieves DKG Session from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) GetDKGSession(
+	ctx contractapi.TransactionContextInterface,
+	epochStr string,
+) (string, error) {
+	dkgKey := "DKG:" + epochStr
+	dkgBytes, err := ctx.GetStub().GetState(dkgKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to read DKG session: %v", err)
+	}
+	if dkgBytes == nil {
+		return "", fmt.Errorf("DKG session not found for epoch %s", epochStr)
+	}
+	return string(dkgBytes), nil
+}
+
+// records a member acknowledgement for the active DKG session
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) AcknowledgeDKG(
+	ctx contractapi.TransactionContextInterface,
+	epochStr string,
+) error {
+	nodeID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Get DKG session
+	dkgKey := "DKG:" + epochStr
+	dkgBytes, err := ctx.GetStub().GetState(dkgKey)
+	if err != nil {
+		return err
+	}
+	if dkgBytes == nil {
+		return fmt.Errorf("DKG session not found for epoch %s", epochStr)
+	}
+
+	var dkgSession map[string]interface{}
+	if err := json.Unmarshal(dkgBytes, &dkgSession); err != nil {
+		return err
+	}
+
+	membersRaw, _ := dkgSession["members"].([]interface{})
+	members := make([]string, 0, len(membersRaw))
+	for _, m := range membersRaw {
+		if s, ok := m.(string); ok {
+			members = append(members, s)
+		}
+	}
+
+	// Is member?
+	if !contains(members, nodeID) {
+		return fmt.Errorf("node %s is not a member of this DKG session", nodeID)
+	}
+	if len(members) == 0 {
+		return fmt.Errorf("DKG session has no members")
+	}
+
+	// Ack list
+	ackedByRaw, _ := dkgSession["ackedBy"].([]interface{})
+	ackedBy := make([]string, 0, len(ackedByRaw))
+	for _, a := range ackedByRaw {
+		if s, ok := a.(string); ok {
+			ackedBy = append(ackedBy, s)
+		}
+	}
+
+	// Guard double acking
+	if contains(ackedBy, nodeID) {
+		return nil
+	}
+
+	status, _ := dkgSession["status"].(string)
+	// Check for already completed ack stages
+	if status == "ready" || status == "proposed" || status == "completed" {
+		return nil
+	}
+	if status != "initiated" {
+		return fmt.Errorf("DKG session not in initiated state, current status: %s", status)
+	}
+
+	// Add ack
+	ackedBy = append(ackedBy, nodeID)
+	dkgSession["ackedBy"] = ackedBy
+	dkgSession["ackCount"] = len(ackedBy)
+
+	// All acknowledged?
+	required := len(members)
+	if len(ackedBy) >= required {
+		dkgSession["status"] = "ready"
+
+		// Emit event
+		epoch, _ := strconv.Atoi(epochStr)
+		eventPayload := map[string]interface{}{
+			"eventVersion": 2,
+			"workflow":     "dkg",
+			"action":       "dkg_ready",
+			"epoch":        epoch,
+			"members":      members,
+		}
+		eventBytes, _ := json.Marshal(eventPayload)
+		ctx.GetStub().SetEvent("DKGReady", eventBytes)
+	}
+
+	// Save update
+	updatedBytes, err := json.Marshal(dkgSession)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState(dkgKey, updatedBytes)
+}
+
+// commits the agreed CA public key for an epoch so threshold signing can later proceed against a single authoritative key.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) CompleteDKG(
+	ctx contractapi.TransactionContextInterface,
+	epochStr string,
+	publicKey string,
+) error {
+	nodeID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Get session
+	dkgKey := "DKG:" + epochStr
+	dkgBytes, err := ctx.GetStub().GetState(dkgKey)
+	if err != nil {
+		return err
+	}
+	if dkgBytes == nil {
+		return fmt.Errorf("DKG session not found for epoch %s", epochStr)
+	}
+
+	var dkgSession map[string]interface{}
+	if err := json.Unmarshal(dkgBytes, &dkgSession); err != nil {
+		return err
+	}
+
+	status, _ := dkgSession["status"].(string)
+
+	// Member?
+	membersRaw, _ := dkgSession["members"].([]interface{})
+	members := make([]string, 0, len(membersRaw))
+	for _, m := range membersRaw {
+		if s, ok := m.(string); ok {
+			members = append(members, s)
+		}
+	}
+
+	if !contains(members, nodeID) {
+		return fmt.Errorf("node %s is not a member of this DKG session", nodeID)
+	}
+	if len(members) == 0 {
+		return fmt.Errorf("DKG session has no members")
+	}
+
+	existingPubKey, _ := dkgSession["publicKey"].(string)
+	// Already finalized?
+	if status == "completed" {
+		// Wrong public key? To prevent a malicous issuance of a wrong key
+		if existingPubKey != "" && existingPubKey != publicKey {
+			return fmt.Errorf("public key mismatch for completed DKG")
+		}
+		return nil
+	}
+	if status != "ready" && status != "proposed" {
+		return fmt.Errorf("DKG session not in ready/proposed state, current status: %s", status)
+	}
+
+	// Record and verify public key
+	if existingPubKey == "" {
+		dkgSession["publicKey"] = publicKey
+	} else if existingPubKey != publicKey {
+		return fmt.Errorf("public key mismatch for DKG completion proposal")
+	}
+
+	// Track acknowledgements
+	completionAckedRaw, _ := dkgSession["completionAckedBy"].([]interface{})
+	completionAckedBy := make([]string, 0, len(completionAckedRaw))
+	for _, a := range completionAckedRaw {
+		if s, ok := a.(string); ok {
+			completionAckedBy = append(completionAckedBy, s)
+		}
+	}
+	if !contains(completionAckedBy, nodeID) {
+		completionAckedBy = append(completionAckedBy, nodeID)
+	}
+	dkgSession["completionAckedBy"] = completionAckedBy
+	dkgSession["completionAckCount"] = len(completionAckedBy)
+
+	requiredAcks := len(members)
+	dkgSession["completionRequiredAcks"] = requiredAcks
+
+	if len(completionAckedBy) < requiredAcks {
+		if status == "ready" {
+			dkgSession["status"] = "proposed"
+		}
+		updatedBytes, err := json.Marshal(dkgSession)
+		if err != nil {
+			return err
+		}
+		if err := ctx.GetStub().PutState(dkgKey, updatedBytes); err != nil {
+			return err
+		}
+		// Emit event
+		eventPayload := map[string]interface{}{
+			"eventVersion": 2,
+			"workflow":     "dkg",
+			"action":       "dkg_completion_proposed",
+			"epoch":        epochStr,
+			"publicKey":    dkgSession["publicKey"],
+			"ackCount":     len(completionAckedBy),
+			"requiredAcks": requiredAcks,
+		}
+		if eventBytes, err := json.Marshal(eventPayload); err == nil {
+			ctx.GetStub().SetEvent("DKGCompletionProposed", eventBytes)
+		}
+		return nil
+	}
+
+	// Required acknowledgements received
+	dkgSession["status"] = "completed"
+	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
+	completedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
+	dkgSession["completedAt"] = completedAt
+
+	// Save updates
+	updatedBytes, err := json.Marshal(dkgSession)
+	if err != nil {
+		return err
+	}
+	if err := ctx.GetStub().PutState(dkgKey, updatedBytes); err != nil {
+		return err
+	}
+
+	// Update the CA
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+	ca.PublicKey = publicKey
+	ca.PartySalt = ""
+	caBytes, err := json.Marshal(ca)
+	if err != nil {
+		return err
+	}
+	if err := ctx.GetStub().PutState("CA:"+DefaultCAID, caBytes); err != nil {
+		return err
+	}
+
+	// Emit completion event
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "dkg",
+		"action":       "dkg_completed",
+		"epoch":        epochStr,
+		"publicKey":    publicKey,
+	}
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("DKGCompleted", eventBytes)
+
+	return nil
+}
+
+// ===================== Helpers for DKG =====================
+
+// derives normalized reshare session values
+// Called by: (*DecentralizedPKIContract).GetReshareSession, (*DecentralizedPKIContract).getLatestActiveReshareSession.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func normalizeReshareSession(reshare *ReshareSession) {
+	if reshare == nil {
+		return
+	}
+	if len(reshare.OldNodeSet) == 0 && len(reshare.NewNodeSet) > 0 {
+		reshare.OldNodeSet = append([]string(nil), reshare.NewNodeSet...)
+	}
+	if reshare.OldThreshold == 0 && reshare.NewThreshold > 0 {
+		reshare.OldThreshold = reshare.NewThreshold
+	}
+	if reshare.CompletionAckedBy == nil {
+		reshare.CompletionAckedBy = []string{}
+	}
+	if reshare.CompletionAckCount == 0 && len(reshare.CompletionAckedBy) > 0 {
+		reshare.CompletionAckCount = len(reshare.CompletionAckedBy)
+	}
+	// Ensure fields are present even for legacy sessions where they were omitted.
+	if reshare.SupersededBy == 0 {
+		reshare.SupersededBy = -1
+	}
+	if strings.TrimSpace(reshare.SupersededAt) == "" {
+		reshare.SupersededAt = "n/a"
+	}
+}
+
+// derives salt values
+// Called by: (*DecentralizedPKIContract).initiateReshare.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func nextPartySalt(current string) string {
+	cur := strings.TrimSpace(current)
+	if cur == "" {
+		return "new"
+	}
+	if cur == "new" {
+		return ""
+	}
+	return "new"
+}
+
+// evaluates whether a dkg is running
+// Called by: (*DecentralizedPKIContract).getActiveDKGStatus.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func isActiveDKGStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "initiated", "ready", "proposed":
+		return true
+	default:
+		return false
+	}
+}
+
+// evaluates whether a reshare is running
+// Called by: (*DecentralizedPKIContract).getLatestActiveReshareSession.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func isActiveReshareStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "initiated", "acknowledged", "proposed":
+		return true
+	default:
+		return false
+	}
+}
+
+// retrieves the active DKG from world state
+// Called by: (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).InitiateDKG, (*DecentralizedPKIContract).assertNoActiveKeySession.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) getActiveDKGStatus(ctx contractapi.TransactionContextInterface) (string, error) {
+	raw, err := ctx.GetStub().GetState("DKG:0")
+	if err != nil {
+		return "", err
+	}
+	if raw == nil {
+		return "", nil
+	}
+	var session map[string]interface{}
+	if err := json.Unmarshal(raw, &session); err != nil {
+		return "", nil
+	}
+	status, _ := session["status"].(string)
+	if isActiveDKGStatus(status) {
+		return status, nil
+	}
+	return "", nil
+}
+
+// retrieves the latest active reshare session from world state
+// Called by: (*DecentralizedPKIContract).InitiateDKG, (*DecentralizedPKIContract).assertNoActiveKeySession.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) getLatestActiveReshareSession(ctx contractapi.TransactionContextInterface) (*ReshareSession, error) {
+	iter, err := ctx.GetStub().GetStateByRange("RESHARE:", "RESHARE;")
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var latest *ReshareSession
+	for iter.HasNext() {
+		kv, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		var sess ReshareSession
+		if err := json.Unmarshal(kv.Value, &sess); err != nil {
+			continue
+		}
+		normalizeReshareSession(&sess)
+		if !isActiveReshareStatus(sess.Status) {
+			continue
+		}
+		if latest == nil || sess.Epoch > latest.Epoch {
+			copySess := sess
+			latest = &copySess
+		}
+	}
+	return latest, nil
+}
+
+// validates that there are no active key generation or resharing sessions before allowing critical operations to proceed
+// Called by: (*DecentralizedPKIContract).ProposeRemoveMember, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).executeJoinApproval, (*DecentralizedPKIContract).executeMemberRemoval.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) assertNoActiveKeySession(ctx contractapi.TransactionContextInterface, action string) error {
+	dkgStatus, err := c.getActiveDKGStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if dkgStatus != "" {
+		return fmt.Errorf("cannot %s while DKG session is %s", action, dkgStatus)
+	}
+	reshare, err := c.getLatestActiveReshareSession(ctx)
+	if err != nil {
+		return err
+	}
+	if reshare != nil {
+		return fmt.Errorf("cannot %s while reshare epoch %d is %s", action, reshare.Epoch, reshare.Status)
+	}
+	return nil
+}
+
+// derives join proposals
+// Called by: (*DecentralizedPKIContract).assertNoPendingMembershipGovernance.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) pendingJoinRequestCount(ctx contractapi.TransactionContextInterface, caID string) (int, error) {
+	startKey := fmt.Sprintf("JOINREQ:%s:", caID)
+	endKey := fmt.Sprintf("JOINREQ:%s;", caID)
+	iter, err := ctx.GetStub().GetStateByRange(startKey, endKey)
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.HasNext() {
+		kv, err := iter.Next()
+		if err != nil {
+			return 0, err
+		}
+		var req JoinRequestProposal
+		if err := json.Unmarshal(kv.Value, &req); err != nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(req.Status), "pending") {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// derives removal proposals
+// Called by: (*DecentralizedPKIContract).assertNoPendingMembershipGovernance.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) pendingRemovalProposalCount(ctx contractapi.TransactionContextInterface, caID string) (int, error) {
+	startKey := fmt.Sprintf("REMOVE:%s:", caID)
+	endKey := fmt.Sprintf("REMOVE:%s;", caID)
+	iter, err := ctx.GetStub().GetStateByRange(startKey, endKey)
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.HasNext() {
+		kv, err := iter.Next()
+		if err != nil {
+			return 0, err
+		}
+		var proposal MemberRemovalProposal
+		if err := json.Unmarshal(kv.Value, &proposal); err != nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(proposal.Status), "pending") {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// validates there are no pending membership governance actions
+// Called by: (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).ProposeRemoveMember, (*DecentralizedPKIContract).RequestJoinCA.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) assertNoPendingMembershipGovernance(ctx contractapi.TransactionContextInterface, caID string, action string) error {
+	pendingJoin, err := c.pendingJoinRequestCount(ctx, caID)
+	if err != nil {
+		return err
+	}
+	pendingRemoval, err := c.pendingRemovalProposalCount(ctx, caID)
+	if err != nil {
+		return err
+	}
+	if pendingJoin > 0 || pendingRemoval > 0 {
+		return fmt.Errorf(
+			"cannot %s while membership governance is pending (join=%d, removal=%d)",
+			action, pendingJoin, pendingRemoval,
+		)
+	}
+	return nil
+}
+
 // ===================== TSS KEY RESHARING =====================
 
+// creates a reshare session for old/new committees
+// Called by: (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).ForceReshare, (*DecentralizedPKIContract).executeJoinApproval, (*DecentralizedPKIContract).executeMemberRemoval.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func (c *DecentralizedPKIContract) initiateReshare(
 	ctx contractapi.TransactionContextInterface,
 	epoch int,
@@ -2542,22 +2497,22 @@ func (c *DecentralizedPKIContract) initiateReshare(
 	initiatedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
 
 	reshare := ReshareSession{
-		Epoch:          epoch,
-		TriggerReason:  reason + ":" + affectedNode,
-		OldNodeSet:     oldNodeSet,
-		OldThreshold:   oldThreshold,
-		NewNodeSet:     newNodeSet,
-		NewThreshold:   newThreshold,
-		Status:         "initiated",
-		AckCount:       0,
-		AcknowledgedBy: []string{},
+		Epoch:              epoch,
+		TriggerReason:      reason + ":" + affectedNode,
+		OldNodeSet:         oldNodeSet,
+		OldThreshold:       oldThreshold,
+		NewNodeSet:         newNodeSet,
+		NewThreshold:       newThreshold,
+		Status:             "initiated",
+		AckCount:           0,
+		AcknowledgedBy:     []string{},
 		CompletionAckedBy:  []string{},
 		CompletionAckCount: 0,
-		InitiatedAt:    initiatedAt,
-		CompletedAt:    "",
-		NewCAPublicKey: "",
-		OldPartySalt:   ca.PartySalt,
-		NewPartySalt:   nextPartySalt(ca.PartySalt),
+		InitiatedAt:        initiatedAt,
+		CompletedAt:        "",
+		NewCAPublicKey:     "",
+		OldPartySalt:       ca.PartySalt,
+		NewPartySalt:       nextPartySalt(ca.PartySalt),
 	}
 
 	reshareJSON, err := json.Marshal(reshare)
@@ -2569,26 +2524,27 @@ func (c *DecentralizedPKIContract) initiateReshare(
 		return err
 	}
 
-	// Emit events - both ReshareInitiated and ReshareRequired for compatibility
+	// Emit event
 	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "reshare",
+		"action":       "reshare_initiated",
 		"epoch":        epoch,
 		"reason":       reason,
 		"nodeSet":      ca.Members,
 		"threshold":    ca.ThresholdParams.Threshold,
 		"newThreshold": newThreshold,
-		"action":       "reshare_initiated",
 	}
 	eventBytes, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("ReshareInitiated", eventBytes)
-
-	// Also emit ReshareRequired for backward compatibility with membership handler
 	ctx.GetStub().SetEvent("ReshareRequired", eventBytes)
 
 	return nil
 }
 
-// ForceReshare manually triggers a reshare for the current CA membership.
-// This is useful when a member was added via bootstrap (no automatic reshare).
+// starts an administrative reshare path so operators can recover from stalled membership-key transitions.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) ForceReshare(
 	ctx contractapi.TransactionContextInterface,
 	caID string,
@@ -2629,8 +2585,12 @@ func (c *DecentralizedPKIContract) ForceReshare(
 		newEpoch++
 	}
 
-	// Supersede any in-progress reshares (avoid stuck epochs)
-	supersedeAt := time.Now().UTC().Format(time.RFC3339Nano)
+	// Ovverride any existing reshares
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get tx timestamp: %v", err)
+	}
+	supersedeAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).UTC().Format(time.RFC3339Nano)
 	iter, err := ctx.GetStub().GetStateByRange("RESHARE:", "RESHARE;")
 	if err != nil {
 		return err
@@ -2658,7 +2618,7 @@ func (c *DecentralizedPKIContract) ForceReshare(
 		}
 	}
 
-	// Bump epoch to represent a new key generation round
+	// Bump epoch
 	ca.Epoch = newEpoch
 
 	// Recalculate threshold based on current governance ratio
@@ -2674,6 +2634,9 @@ func (c *DecentralizedPKIContract) ForceReshare(
 	return c.initiateReshare(ctx, ca.Epoch, reason, nodeID, oldMembers, oldThreshold, ca.Members, newThreshold)
 }
 
+// records committee readiness for reshare so completion eligibility reflects actual participant acknowledgement.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) AcknowledgeReshare(
 	ctx contractapi.TransactionContextInterface,
 	epoch int,
@@ -2714,32 +2677,23 @@ func (c *DecentralizedPKIContract) AcknowledgeReshare(
 		return fmt.Errorf("node not in new node set")
 	}
 
-	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
-	if err != nil {
-		return err
-	}
-
 	reshare.AcknowledgedBy = append(reshare.AcknowledgedBy, nodeID)
 	reshare.AckCount++
 
-	// Check if enough nodes acknowledged (quorum-based)
-	required := calculateDynamicThreshold(len(reshare.NewNodeSet), ca.GovernanceParams.QuorumPercentage) + 1
-	if required < 1 {
-		required = 1
-	}
-	if required > len(reshare.NewNodeSet) {
-		required = len(reshare.NewNodeSet)
-	}
+	// Require full new-committee acknowledgement before starting reshare keygen (possible point for a DoS but can't be circumvented in this library to provide a proper reshare)
+	required := len(reshare.NewNodeSet)
 	if len(reshare.NewNodeSet) == 0 {
 		return fmt.Errorf("reshare has empty node set")
 	}
 	if reshare.AckCount >= required {
 		reshare.Status = "acknowledged"
 
-		// Emit event for off-chain DKG execution
+		// Emit event for off-chain DKG
 		eventPayload := map[string]interface{}{
-			"epoch":  epoch,
-			"action": "all_nodes_ready_for_dkg",
+			"eventVersion": 2,
+			"workflow":     "reshare",
+			"action":       "all_nodes_ready_for_dkg",
+			"epoch":        epoch,
 		}
 		eventBytes, _ := json.Marshal(eventPayload)
 		ctx.GetStub().SetEvent("DKGReady", eventBytes)
@@ -2756,6 +2710,9 @@ func (c *DecentralizedPKIContract) AcknowledgeReshare(
 	return ctx.GetStub().PutState("RESHARE:"+strconv.Itoa(epoch), reshareJSON)
 }
 
+// finalizes a reshare epoch and public-key continuity checks so post-membership signing remains coherent and auditable.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) CompleteReshare(
 	ctx contractapi.TransactionContextInterface,
 	epoch int,
@@ -2813,9 +2770,11 @@ func (c *DecentralizedPKIContract) CompleteReshare(
 	}
 	reshare.CompletionAckCount = len(reshare.CompletionAckedBy)
 
-	requiredAcks := calculateDynamicThreshold(len(reshare.NewNodeSet), ca.GovernanceParams.QuorumPercentage)
-	if requiredAcks < 1 {
-		requiredAcks = 1
+	// Require full new-committee completion acknowledgements before marking the eshare completed on-chain. This prevents next governance actions from tarting while some peers are still finishing local reshare processing.
+	// DoS possible but due to library limitations
+	requiredAcks := len(reshare.NewNodeSet)
+	if requiredAcks == 0 {
+		return fmt.Errorf("reshare has empty node set")
 	}
 
 	if len(reshare.CompletionAckedBy) < requiredAcks {
@@ -2830,11 +2789,13 @@ func (c *DecentralizedPKIContract) CompleteReshare(
 			return err
 		}
 		eventPayload := map[string]interface{}{
+			"eventVersion": 2,
+			"workflow":     "reshare",
+			"action":       "reshare_completion_proposed",
 			"epoch":        strconv.Itoa(epoch),
 			"publicKey":    reshare.NewCAPublicKey,
 			"ackCount":     len(reshare.CompletionAckedBy),
 			"requiredAcks": requiredAcks,
-			"action":       "reshare_completion_proposed",
 		}
 		if eventBytes, err := json.Marshal(eventPayload); err == nil {
 			ctx.GetStub().SetEvent("ReshareCompletionProposed", eventBytes)
@@ -2859,7 +2820,7 @@ func (c *DecentralizedPKIContract) CompleteReshare(
 		return err
 	}
 
-	// Update CA public key (should be unchanged during reshare)
+	// Update CA public key (should be unchanged during reshar, could also integrate a check here)
 	ca.PublicKey = newCAPublicKey
 	ca.PartySalt = reshare.NewPartySalt
 
@@ -2871,10 +2832,12 @@ func (c *DecentralizedPKIContract) CompleteReshare(
 		return err
 	}
 
-	eventPayload := map[string]string{
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "reshare",
+		"action":       "reshare_completed",
 		"epoch":        strconv.Itoa(epoch),
 		"newPublicKey": newCAPublicKey,
-		"action":       "reshare_completed",
 	}
 	eventBytes, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("ReshareCompleted", eventBytes)
@@ -2884,6 +2847,9 @@ func (c *DecentralizedPKIContract) CompleteReshare(
 
 // ===================== QUERY FUNCTIONS =====================
 
+// loads and validates the canonical CA record so all flows read a single authoritative governance and key-management state.
+// Called by: (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).CompleteDKG, (*DecentralizedPKIContract).CompleteReshare, (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).ForceReshare, (*DecentralizedPKIContract).GetCAPublicKey, (*DecentralizedPKIContract).GetNodeRole, (*DecentralizedPKIContract).GetOrgMembershipStats, (*DecentralizedPKIContract).GetTrustedCA, (*DecentralizedPKIContract).InitiateDKG, (*DecentralizedPKIContract).ProposeRemoveMember, (*DecentralizedPKIContract).ProposeRevocation, (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SetMerkleEnabled, (*DecentralizedPKIContract).SubmitCSR, (*DecentralizedPKIContract).SubmitPartialSignature, (*DecentralizedPKIContract).ValidateMemberCandidate, (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).VoteOnRevocation, (*DecentralizedPKIContract).executeJoinApproval, (*DecentralizedPKIContract).executeMemberRemoval, (*DecentralizedPKIContract).executeRevocation, (*DecentralizedPKIContract).initiateReshare, (*DecentralizedPKIContract).initiateSigningSession, (*DecentralizedPKIContract).verifyTSSSignature.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetDistributedCA(
 	ctx contractapi.TransactionContextInterface,
 	caID string,
@@ -2901,11 +2867,16 @@ func (c *DecentralizedPKIContract) GetDistributedCA(
 	return &ca, nil
 }
 
+// returns the caller canonical identity and role context so clients can debug authorization and membership
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) WhoAmI(ctx contractapi.TransactionContextInterface) (string, error) {
 	return c.canonicalMemberID(ctx)
 }
 
-// GetAllCertificates retrieves all registered certificates
+// retrieves All Certificates from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetAllCertificates(
 	ctx contractapi.TransactionContextInterface,
 ) ([]Certificate, error) {
@@ -2936,7 +2907,9 @@ func (c *DecentralizedPKIContract) GetAllCertificates(
 	return certificates, nil
 }
 
-// GetStateByRange is a generic function that retrieves all state values in a given range.
+// retrieves State By Range from world state (generic query)
+// Called by: (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).ForceReshare, (*DecentralizedPKIContract).GetAllCertificates, (*DecentralizedPKIContract).GetAllPeerAddresses, (*DecentralizedPKIContract).GetPendingCSRProposals, (*DecentralizedPKIContract).GetPendingRevocations, (*DecentralizedPKIContract).GetPendingSigningSessions, (*DecentralizedPKIContract).GetStateByRange, (*DecentralizedPKIContract).IsNodeRevoked, (*DecentralizedPKIContract).ListPendingJoinRequests, (*DecentralizedPKIContract).ListPendingRemoveMemberProposals, (*DecentralizedPKIContract).getLatestActiveReshareSession, (*DecentralizedPKIContract).pendingJoinRequestCount, (*DecentralizedPKIContract).pendingRemovalProposalCount, (*DecentralizedPKIContract).updateCertificateMerkleTree.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetStateByRange(
 	ctx contractapi.TransactionContextInterface,
 	startKey string,
@@ -2963,7 +2936,9 @@ func (c *DecentralizedPKIContract) GetStateByRange(
 	return results, nil
 }
 
-// GetPendingCSRProposals returns all CSR proposals with "pending" status
+// retrieves pending CSR Proposals from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetPendingCSRProposals(
 	ctx contractapi.TransactionContextInterface,
 ) ([]*CSRProposal, error) {
@@ -2995,6 +2970,9 @@ func (c *DecentralizedPKIContract) GetPendingCSRProposals(
 	return pendingProposals, nil
 }
 
+// retrieves CSR Proposal from world state
+// Called by: (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature, (*DecentralizedPKIContract).VoteOnCSR.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetCSRProposal(
 	ctx contractapi.TransactionContextInterface,
 	proposalID string,
@@ -3012,6 +2990,9 @@ func (c *DecentralizedPKIContract) GetCSRProposal(
 	return &proposal, nil
 }
 
+// retrieves Signing Session from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetSigningSession(
 	ctx contractapi.TransactionContextInterface,
 	proposalID string,
@@ -3029,7 +3010,9 @@ func (c *DecentralizedPKIContract) GetSigningSession(
 	return &session, nil
 }
 
-// GetPendingSigningSessions returns all active signing sessions
+// retrieves Pending Signing Sessions from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetPendingSigningSessions(
 	ctx contractapi.TransactionContextInterface,
 ) ([]SigningSession, error) {
@@ -3065,9 +3048,9 @@ func (c *DecentralizedPKIContract) GetPendingSigningSessions(
 	return sessions, nil
 }
 
-// GetCertificate retrieves a certificate by proposalID or memberID.
-// It first tries CERT:<id> directly (proposalID), then falls back to
-// looking up the active cert via ACTIVECERT:<id> (memberID).
+// retrieves Certificate from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetCertificate(
 	ctx contractapi.TransactionContextInterface,
 	id string,
@@ -3104,7 +3087,9 @@ func (c *DecentralizedPKIContract) GetCertificate(
 	return &cert, nil
 }
 
-// GetPendingRevocations returns all revocation proposals with "pending" status
+// retrieves Pending Revocations from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetPendingRevocations(
 	ctx contractapi.TransactionContextInterface,
 ) ([]RevocationProposal, error) {
@@ -3131,6 +3116,9 @@ func (c *DecentralizedPKIContract) GetPendingRevocations(
 	return proposals, nil
 }
 
+// retrieves Reshare Session from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetReshareSession(
 	ctx contractapi.TransactionContextInterface,
 	epoch int,
@@ -3152,8 +3140,8 @@ func (c *DecentralizedPKIContract) GetReshareSession(
 }
 
 // ===================== PEER DISCOVERY =====================
+// This is the part where the peers register their TSS p2p adress
 
-// PeerInfo stores P2P connection information for a peer
 type PeerInfo struct {
 	NodeID    string `json:"nodeId"`
 	Address   string `json:"address"`
@@ -3162,7 +3150,9 @@ type PeerInfo struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-// RegisterPeerAddress stores a peer's P2P address for discovery
+// applies controlled state transitions for Peer Address
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) RegisterPeerAddress(
 	ctx contractapi.TransactionContextInterface,
 	address string,
@@ -3205,7 +3195,9 @@ func (c *DecentralizedPKIContract) RegisterPeerAddress(
 	return ctx.GetStub().PutState("PEER:"+nodeID, peerJSON)
 }
 
-// GetPeerAddress retrieves a peer's P2P address
+// retrieves Peer Address from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetPeerAddress(
 	ctx contractapi.TransactionContextInterface,
 	nodeID string,
@@ -3225,7 +3217,9 @@ func (c *DecentralizedPKIContract) GetPeerAddress(
 	return &peerInfo, nil
 }
 
-// GetAllPeerAddresses retrieves all registered peer addresses
+// retrieves All Peer Addresses from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetAllPeerAddresses(
 	ctx contractapi.TransactionContextInterface,
 ) ([]PeerInfo, error) {
@@ -3252,6 +3246,9 @@ func (c *DecentralizedPKIContract) GetAllPeerAddresses(
 	return peers, nil
 }
 
+// reports whether the distributed CA record already exists so setup clients can avoid duplicate initialization attempts.
+// Called by: (*DecentralizedPKIContract).InitializeDistributedCA.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) CAExists(
 	ctx contractapi.TransactionContextInterface,
 	caID string,
@@ -3263,6 +3260,9 @@ func (c *DecentralizedPKIContract) CAExists(
 	return caJSON != nil, nil
 }
 
+// reports whether a proposal key exists so clients can guard follow-up governance calls against missing state.
+// Called by: (*DecentralizedPKIContract).SubmitCSR.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) ProposalExists(
 	ctx contractapi.TransactionContextInterface,
 	proposalID string,
@@ -3274,8 +3274,705 @@ func (c *DecentralizedPKIContract) ProposalExists(
 	return proposalJSON != nil, nil
 }
 
+// ===================== TSS SIGNING COORDINATION =====================
+
+type deterministicSigningCertificateMaterial struct {
+	CSR               *x509.CertificateRequest
+	SerialNumber      *big.Int
+	SerialNumberStr   string
+	ValidityDays      int
+	NotBefore         time.Time
+	NotAfter          time.Time
+	Subject           string
+	PublicKeyHex      string
+	RawTBSCertificate []byte
+	TBSHash           []byte
+	TBSHashHex        string
+}
+
+// derives normalized signing validity From Created At values
+// Called by: buildDeterministicSigningCertificateMaterial.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func deterministicSigningValidityFromCreatedAt(createdAt time.Time) (time.Time, time.Time, int) {
+	notBefore := createdAt.UTC().Truncate(time.Second)
+	validityDays := 365
+	notAfter := notBefore.AddDate(0, 0, validityDays)
+	return notBefore, notAfter, validityDays
+}
+
+// derives normalized signing serial values
+// Called by: buildDeterministicSigningCertificateMaterial.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func deterministicSigningSerial(proposalID, submitterID string, notBefore time.Time) *big.Int {
+	seed := strings.TrimSpace(proposalID) + "|" +
+		strings.TrimSpace(submitterID) + "|" +
+		notBefore.UTC().Format(time.RFC3339)
+	sum := sha256.Sum256([]byte(seed))
+	serialBytes := append([]byte(nil), sum[:20]...)
+	serialBytes[0] &= 0x7f
+	zero := true
+	for _, b := range serialBytes {
+		if b != 0 {
+			zero = false
+			break
+		}
+	}
+	if zero {
+		serialBytes[len(serialBytes)-1] = 1
+	}
+	serial := new(big.Int).SetBytes(serialBytes)
+	if serial.Sign() <= 0 {
+		return big.NewInt(1)
+	}
+	return serial
+}
+
+// constructs provisional raw TBS (to be signed) deterministically
+// Called by: buildDeterministicSigningCertificateMaterial.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func buildProvisionalRawTBS(template, issuer *x509.Certificate, subjectPublicKey interface{}) ([]byte, error) {
+	throwawayKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate throwaway key: %w", err)
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, issuer, subjectPublicKey, throwawayKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provisional certificate: %w", err)
+	}
+	parsed, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse provisional certificate: %w", err)
+	}
+	if len(parsed.RawTBSCertificate) == 0 {
+		return nil, fmt.Errorf("provisional certificate missing RawTBSCertificate")
+	}
+	return append([]byte(nil), parsed.RawTBSCertificate...), nil
+}
+
+// derives deterministic certificate fields and TBS (to be signed) bytes so all parties sign the same certificate message and prevent hash drift.
+// Called by: (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature, (*DecentralizedPKIContract).initiateSigningSession.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func buildDeterministicSigningCertificateMaterial(
+	proposalID string,
+	proposal *CSRProposal,
+	sessionCreatedAt time.Time,
+) (*deterministicSigningCertificateMaterial, error) {
+	if proposal == nil {
+		return nil, fmt.Errorf("missing CSR proposal")
+	}
+	if strings.TrimSpace(proposal.CSRData) == "" {
+		return nil, fmt.Errorf("CSR proposal missing CSRData")
+	}
+
+	csrBlock, _ := pem.Decode([]byte(proposal.CSRData))
+	if csrBlock == nil {
+		return nil, fmt.Errorf("failed to decode CSR PEM")
+	}
+	csr, err := x509.ParseCertificateRequest(csrBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("invalid CSR signature: %w", err)
+	}
+
+	notBefore, notAfter, validityDays := deterministicSigningValidityFromCreatedAt(sessionCreatedAt)
+	serial := deterministicSigningSerial(proposalID, proposal.SubmitterID, notBefore)
+
+	certTemplate := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      csr.Subject,
+		Issuer: pkix.Name{
+			CommonName:   "Decentralized PKI CA",
+			Organization: []string{"BPKI"},
+		},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		SignatureAlgorithm:    x509.ECDSAWithSHA256,
+		DNSNames:              csr.DNSNames,
+		EmailAddresses:        csr.EmailAddresses,
+		IPAddresses:           csr.IPAddresses,
+		URIs:                  csr.URIs,
+	}
+	issuerTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName:   "Decentralized PKI CA",
+			Organization: []string{"BPKI"},
+		},
+		NotBefore:             notBefore.Add(-24 * time.Hour),
+		NotAfter:              notBefore.AddDate(10, 0, 0),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		SignatureAlgorithm:    x509.ECDSAWithSHA256,
+	}
+
+	rawTBS, err := buildProvisionalRawTBS(certTemplate, issuerTemplate, csr.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	tbsHash := sha256.Sum256(rawTBS)
+
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal CSR public key: %w", err)
+	}
+
+	return &deterministicSigningCertificateMaterial{
+		CSR:               csr,
+		SerialNumber:      serial,
+		SerialNumberStr:   serial.String(),
+		ValidityDays:      validityDays,
+		NotBefore:         notBefore,
+		NotAfter:          notAfter,
+		Subject:           csr.Subject.String(),
+		PublicKeyHex:      hex.EncodeToString(pubKeyBytes),
+		RawTBSCertificate: rawTBS,
+		TBSHash:           append([]byte(nil), tbsHash[:]...),
+		TBSHashHex:        hex.EncodeToString(tbsHash[:]),
+	}, nil
+}
+
+// derives normalized String Slices
+// Called by: validateCertificateAgainstCSR.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// derives normalized IP Slices
+// Called by: validateCertificateAgainstCSR.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func equalIPSlices(a, b []net.IP) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Equal(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// derives normalized URI Slices
+// Called by: validateCertificateAgainstCSR.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func equalURISlices(a, b []*url.URL) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		switch {
+		case a[i] == nil && b[i] == nil:
+			continue
+		case a[i] == nil || b[i] == nil:
+			return false
+		case a[i].String() != b[i].String():
+			return false
+		}
+	}
+	return true
+}
+
+// validates certificate against CSR so invalid identities, signatures, and state transitions are rejected before commit.
+// Called by: (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func validateCertificateAgainstCSR(cert *x509.Certificate, csr *x509.CertificateRequest) error {
+	if cert == nil {
+		return fmt.Errorf("parsed certificate is nil")
+	}
+	if csr == nil {
+		return fmt.Errorf("parsed CSR is nil")
+	}
+	if cert.Subject.String() != csr.Subject.String() {
+		return fmt.Errorf("certificate subject does not match CSR subject")
+	}
+	if !bytes.Equal(cert.RawSubjectPublicKeyInfo, csr.RawSubjectPublicKeyInfo) {
+		return fmt.Errorf("certificate public key does not match CSR public key")
+	}
+	if !equalStringSlices(cert.DNSNames, csr.DNSNames) {
+		return fmt.Errorf("certificate DNS SANs do not match CSR")
+	}
+	if !equalStringSlices(cert.EmailAddresses, csr.EmailAddresses) {
+		return fmt.Errorf("certificate email SANs do not match CSR")
+	}
+	if !equalIPSlices(cert.IPAddresses, csr.IPAddresses) {
+		return fmt.Errorf("certificate IP SANs do not match CSR")
+	}
+	if !equalURISlices(cert.URIs, csr.URIs) {
+		return fmt.Errorf("certificate URI SANs do not match CSR")
+	}
+	return nil
+}
+
+// creates deterministic signing-session material so all signers hash and sign the exact same certificate payload.
+// Called by: (*DecentralizedPKIContract).VoteOnCSR.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func (c *DecentralizedPKIContract) initiateSigningSession(
+	ctx contractapi.TransactionContextInterface,
+	proposal *CSRProposal,
+) error {
+	if proposal == nil {
+		return fmt.Errorf("missing CSR proposal")
+	}
+	if strings.TrimSpace(proposal.ProposalID) == "" {
+		return fmt.Errorf("missing CSR proposal ID")
+	}
+
+	// Idempotency guard: once a signing session exists and is active/completed,
+	// never overwrite it. This prevents csrHash/createdAt drift mid-signing.
+	sessionKey := "SIGNING:" + proposal.ProposalID
+	existingJSON, err := ctx.GetStub().GetState(sessionKey)
+	if err != nil {
+		return err
+	}
+	if existingJSON != nil {
+		var existing SigningSession
+		if err := json.Unmarshal(existingJSON, &existing); err != nil {
+			return fmt.Errorf("failed to decode existing signing session: %w", err)
+		}
+		switch existing.Status {
+		case "active", "completed":
+			return nil
+		}
+	}
+
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return err
+	}
+	createdAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+	certMaterial, err := buildDeterministicSigningCertificateMaterial(proposal.ProposalID, proposal, createdAt)
+	if err != nil {
+		return err
+	}
+
+	session := SigningSession{
+		ProposalID:        proposal.ProposalID,
+		CSRHash:           certMaterial.TBSHashHex,
+		RequiredSigners:   ca.ThresholdParams.Threshold + 1,
+		PartialSignatures: []PartialSignature{},
+		Status:            "active",
+		CreatedAt:         createdAt,
+	}
+
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+
+	if err := ctx.GetStub().PutState(sessionKey, sessionJSON); err != nil {
+		return err
+	}
+
+	// Emit event for nodes to start TSS
+	eventPayload := map[string]interface{}{
+		"eventVersion": 2,
+		"workflow":     "csr",
+		"action":       "signing_initiated",
+		"proposalId":   proposal.ProposalID,
+		"csrHash":      certMaterial.TBSHashHex,
+	}
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("SigningInitiated", eventBytes)
+
+	return nil
+}
+
+// verifies and records partial threshold signatures so only valid signer contributions count toward issuance.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) SubmitPartialSignature(
+	ctx contractapi.TransactionContextInterface,
+	proposalID string,
+	partialSig string,
+	signerIndex int,
+	publicKeyShare string,
+) error {
+
+	// Get signer identity
+	signerID, err := c.canonicalMemberID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get signer identity: %v", err)
+	}
+
+	// Check CA membership
+
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+
+	if !contains(ca.Members, signerID) {
+		return fmt.Errorf("signer %s is not authorized", signerID)
+	}
+
+	// Get signing session
+	sessionJSON, err := ctx.GetStub().GetState("SIGNING:" + proposalID)
+	if err != nil {
+		return err
+	}
+	if sessionJSON == nil {
+		return fmt.Errorf("signing session not found for proposal %s", proposalID)
+	}
+
+	var session SigningSession
+	if err := json.Unmarshal(sessionJSON, &session); err != nil {
+		return err
+	}
+
+	if session.Status != "active" {
+		return fmt.Errorf("signing session is not active")
+	}
+	if strings.TrimSpace(session.CSRHash) == "" {
+		return fmt.Errorf("signing session has empty signing hash")
+	}
+
+	// Check if already submitted
+	for _, sig := range session.PartialSignatures {
+		if sig.SignerID == signerID {
+			return fmt.Errorf("signer %s already submitted signature", signerID)
+		}
+	}
+
+	// Validate submitted signature before counting it toward threshold.
+	partialSig = strings.TrimSpace(partialSig)
+	parts := strings.Split(partialSig, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid partial signature format: expected hexR:hexS")
+	}
+	sigR := strings.TrimSpace(parts[0])
+	sigS := strings.TrimSpace(parts[1])
+	if sigR == "" || sigS == "" {
+		return fmt.Errorf("invalid partial signature format: empty R/S component")
+	}
+	valid, err := c.verifyTSSSignature(ctx, session.CSRHash, sigR, sigS)
+	if err != nil {
+		return fmt.Errorf("invalid partial signature: %w", err)
+	}
+	if !valid {
+		return fmt.Errorf("invalid partial signature")
+	}
+	// Normalize stored format so all entries are consistent.
+	partialSig = strings.ToLower(sigR) + ":" + strings.ToLower(sigS)
+
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return err
+	}
+	submittedAt := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	// Add partial signature
+	partialSignature := PartialSignature{
+		SignerID:       signerID,
+		PartialSig:     partialSig,
+		SignerIndex:    signerIndex,
+		SubmittedAt:    submittedAt,
+		PublicKeyShare: publicKeyShare,
+	}
+
+	session.PartialSignatures = append(session.PartialSignatures, partialSignature)
+
+	// Check if threshold reached
+	if len(session.PartialSignatures) >= session.RequiredSigners {
+		session.Status = "completed"
+
+		// Emit event for signature combination
+		eventPayload := map[string]interface{}{
+			"eventVersion":    2,
+			"workflow":        "csr",
+			"action":          "threshold_reached",
+			"proposalId":      proposalID,
+			"signaturesCount": len(session.PartialSignatures),
+		}
+		eventBytes, _ := json.Marshal(eventPayload)
+		ctx.GetStub().SetEvent("ThresholdReached", eventBytes)
+	}
+
+	// Save updated session
+	sessionJSON, err = json.Marshal(session)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState("SIGNING:"+proposalID, sessionJSON)
+}
+
+// verifies strict certificate/signature binding and writes the issued certificate so ledger state reflects only valid threshold-issued certs.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
+func (c *DecentralizedPKIContract) RegisterCombinedCertificateWithSignature(
+	ctx contractapi.TransactionContextInterface,
+	proposalID string,
+	certificatePEM string,
+	certificateHash string,
+	subject string,
+	publicKey string,
+	serialNumber string,
+	validityDays int,
+	signatureR string,
+	signatureS string,
+) error {
+
+	// Certificate already combined?
+	existingCertJSON, err := ctx.GetStub().GetState("CERT:" + proposalID)
+	if err != nil {
+		return err
+	}
+	if existingCertJSON != nil {
+		return nil
+	}
+
+	// Get signing session
+	sessionJSON, err := ctx.GetStub().GetState("SIGNING:" + proposalID)
+	if err != nil {
+		return err
+	}
+	if sessionJSON == nil {
+		return fmt.Errorf("signing session not found")
+	}
+
+	var session SigningSession
+	if err := json.Unmarshal(sessionJSON, &session); err != nil {
+		return err
+	}
+
+	if session.Status != "completed" {
+		return fmt.Errorf("signing session not completed yet")
+	}
+
+	// Get proposal
+	proposal, err := c.GetCSRProposal(ctx, proposalID)
+	if err != nil {
+		return err
+	}
+
+	certificateHash = strings.ToLower(strings.TrimSpace(certificateHash))
+	subject = strings.TrimSpace(subject)
+	publicKey = strings.TrimSpace(publicKey)
+	serialNumber = strings.TrimSpace(serialNumber)
+	signatureR = strings.TrimSpace(signatureR)
+	signatureS = strings.TrimSpace(signatureS)
+
+	// Validate certificate hash format
+	if len(certificateHash) != 64 {
+		return fmt.Errorf("invalid certificate hash")
+	}
+	if signatureR == "" || signatureS == "" {
+		return fmt.Errorf("missing TSS signature components")
+	}
+
+	certMaterial, err := buildDeterministicSigningCertificateMaterial(proposalID, proposal, session.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to derive deterministic certificate material: %w", err)
+	}
+	if !strings.EqualFold(session.CSRHash, certMaterial.TBSHashHex) {
+		return fmt.Errorf("session signing hash mismatch with deterministic certificate material")
+	}
+
+	certBlock, _ := pem.Decode([]byte(certificatePEM))
+	if certBlock == nil {
+		return fmt.Errorf("invalid certificate PEM")
+	}
+	certDER := certBlock.Bytes
+	computedCertHash := sha256.Sum256(certDER)
+	if hex.EncodeToString(computedCertHash[:]) != certificateHash {
+		return fmt.Errorf("certificate hash does not match certificate PEM")
+	}
+	parsedCert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return fmt.Errorf("failed to parse certificate PEM: %w", err)
+	}
+	if parsedCert.SignatureAlgorithm != x509.ECDSAWithSHA256 {
+		return fmt.Errorf("unsupported certificate signature algorithm: %s", parsedCert.SignatureAlgorithm.String())
+	}
+	if err := validateCertificateAgainstCSR(parsedCert, certMaterial.CSR); err != nil {
+		return err
+	}
+	if parsedCert.SerialNumber == nil || parsedCert.SerialNumber.Cmp(certMaterial.SerialNumber) != 0 {
+		return fmt.Errorf("certificate serial number does not match deterministic value")
+	}
+	if !parsedCert.NotBefore.Equal(certMaterial.NotBefore) || !parsedCert.NotAfter.Equal(certMaterial.NotAfter) {
+		return fmt.Errorf("certificate validity window does not match deterministic session window")
+	}
+	if !bytes.Equal(parsedCert.RawTBSCertificate, certMaterial.RawTBSCertificate) {
+		return fmt.Errorf("certificate TBS does not match deterministic certificate material")
+	}
+
+	certPublicKeyBytes, err := x509.MarshalPKIXPublicKey(parsedCert.PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal certificate public key: %w", err)
+	}
+	certPublicKeyHex := strings.ToLower(hex.EncodeToString(certPublicKeyBytes))
+	if subject != certMaterial.Subject || subject != parsedCert.Subject.String() {
+		return fmt.Errorf("subject field mismatch with certificate/CSR")
+	}
+	if !strings.EqualFold(publicKey, certMaterial.PublicKeyHex) || !strings.EqualFold(publicKey, certPublicKeyHex) {
+		return fmt.Errorf("public key field mismatch with certificate/CSR")
+	}
+	if serialNumber != certMaterial.SerialNumberStr {
+		return fmt.Errorf("serial number field mismatch with deterministic value")
+	}
+	if validityDays != certMaterial.ValidityDays {
+		return fmt.Errorf("validityDays mismatch with deterministic policy")
+	}
+
+	rBytes, err := hex.DecodeString(signatureR)
+	if err != nil {
+		return fmt.Errorf("invalid signatureR hex: %w", err)
+	}
+	sBytes, err := hex.DecodeString(signatureS)
+	if err != nil {
+		return fmt.Errorf("invalid signatureS hex: %w", err)
+	}
+	r := new(big.Int).SetBytes(rBytes)
+	s := new(big.Int).SetBytes(sBytes)
+	if r.Sign() <= 0 || s.Sign() <= 0 {
+		return fmt.Errorf("invalid zero-valued signature components")
+	}
+	type ecdsaSig struct {
+		R, S *big.Int
+	}
+	sigASN1, err := asn1.Marshal(ecdsaSig{R: r, S: s})
+	if err != nil {
+		return fmt.Errorf("failed to marshal signature components: %w", err)
+	}
+	if !bytes.Equal(parsedCert.Signature, sigASN1) {
+		return fmt.Errorf("submitted signature components do not match certificate signature")
+	}
+
+	// Get CA
+	ca, err := c.GetDistributedCA(ctx, DefaultCAID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(ca.PublicKey) == "" {
+		return fmt.Errorf("CA public key is not initialized")
+	}
+	caPubKey, err := reconstructPublicKeyFromHex(ca.PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to reconstruct CA public key: %w", err)
+	}
+	tbsHash := sha256.Sum256(parsedCert.RawTBSCertificate)
+	tbsHashHex := hex.EncodeToString(tbsHash[:])
+	if !strings.EqualFold(tbsHashHex, certMaterial.TBSHashHex) || !strings.EqualFold(tbsHashHex, session.CSRHash) {
+		return fmt.Errorf("certificate TBS hash mismatch with session")
+	}
+	if !ecdsa.Verify(caPubKey, tbsHash[:], r, s) {
+		return fmt.Errorf("certificate signature verification failed against CA public key")
+	}
+
+	tracker := newStorageAttributionTracker("csr", "certificate_registered", proposalID, strconv.Itoa(ca.Epoch))
+
+	issuedAt := certMaterial.NotBefore
+	expiresAt := certMaterial.NotAfter
+	normalizedCertificatePEM := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	}))
+
+	// Create certificate record
+	// At the moment the pem and hash are stored making it also possible to view the certificate directly
+	// Could be changed to verify the signature and then only store the hash and reference to the certificate data if we want to save space and not store the full certificate on-chain
+	cert := Certificate{
+		CertID:           "CERT:" + proposalID,
+		MemberID:         proposal.SubmitterID,
+		CertificatePEM:   normalizedCertificatePEM,
+		CertificateHash:  certificateHash,
+		Subject:          certMaterial.Subject,
+		PublicKey:        certMaterial.PublicKeyHex,
+		SerialNumber:     certMaterial.SerialNumberStr,
+		IssuedAt:         issuedAt,
+		ExpiresAt:        expiresAt,
+		Status:           "active",
+		IsRevoked:        false,
+		RevokedAt:        "",
+		RevocationReason: "NOT_REVOKED",
+		ProposalID:       proposalID,
+		Epoch:            ca.Epoch,
+		SignatureR:       signatureR,
+		SignatureS:       signatureS,
+	}
+
+	certJSON, err := json.Marshal(cert)
+	if err != nil {
+		return err
+	}
+	tracker.trackWrite("certificate", certJSON)
+
+	// Store certificate by proposalID
+	if err := ctx.GetStub().PutState("CERT:"+proposalID, certJSON); err != nil {
+		return err
+	}
+
+	// Update active cert index for this member
+	activeIndexValue := []byte(proposalID)
+	tracker.trackWrite("active_index", activeIndexValue)
+	if err := ctx.GetStub().PutState("ACTIVECERT:"+proposal.SubmitterID, []byte(proposalID)); err != nil {
+		return err
+	}
+
+	// Update proposal status
+	proposal.Status = "completed"
+	proposalJSON, err := json.Marshal(proposal)
+	if err != nil {
+		return err
+	}
+	tracker.trackWrite("proposal", proposalJSON)
+	if err := ctx.GetStub().PutState("PROPOSAL:"+proposalID, proposalJSON); err != nil {
+		return err
+	}
+
+	// Update Merkle tree of active certificates
+	if err := c.updateCertificateMerkleTree(ctx, "certificate_registered", cert.CertID, certificateHash, false); err != nil {
+		// Log if update fails but do not fail the whole transaction since the certificate is validly registered and the Merkle tree can be updated in a later transaction
+		fmt.Printf("Warning: failed to update Merkle tree: %v\n", err)
+	} else {
+		merkleState, _ := ctx.GetStub().GetState("MERKLE:CERTS")
+		tracker.trackWrite("merkle_state", merkleState)
+	}
+
+	// Emit certificate registered event
+	eventPayload := map[string]interface{}{
+		"eventVersion":    2,
+		"workflow":        "csr",
+		"action":          "certificate_registered",
+		"proposalId":      proposalID,
+		"nodeId":          proposal.SubmitterID,
+		"certificateHash": certificateHash,
+		"epoch":           strconv.Itoa(ca.Epoch),
+	}
+	tracker.applyToEventPayload(ctx, eventPayload)
+	eventBytes, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("CertificateRegistered", eventBytes)
+
+	return nil
+}
+
 // ===================== HELPER FUNCTIONS =====================
 
+// manages chaincode state
+// Called by: (*DecentralizedPKIContract).AcknowledgeDKG, (*DecentralizedPKIContract).AcknowledgeReshare, (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).CompleteDKG, (*DecentralizedPKIContract).CompleteReshare, (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).ForceReshare, (*DecentralizedPKIContract).GetNodeRole, (*DecentralizedPKIContract).InitiateDKG, (*DecentralizedPKIContract).ProposeRemoveMember, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SetMerkleEnabled, (*DecentralizedPKIContract).SubmitPartialSignature, (*DecentralizedPKIContract).ValidateMemberCandidate, (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).VoteOnRevocation, (*DecentralizedPKIContract).executeJoinApproval, (*DecentralizedPKIContract).executeMemberRemoval.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -3285,35 +3982,144 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// extractOrgFromMemberID extracts the Fabric org MSP ID from a canonical member ID
-// The member ID format is: x509::CN=User1,OU=client::CN=ca.org1.example.com,O=org1.example.com...
-// We extract the org from the issuer's CN (ca.orgX.example.com)
+// derives normalized Org From Member ID
+// Called by: (*DecentralizedPKIContract).GetOrgMembershipStats, (*DecentralizedPKIContract).ValidateMemberCandidate, countVotingOrgs.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func extractOrgFromMemberID(memberID string) string {
-	// Split by :: to get issuer part
-	parts := strings.Split(memberID, "::")
-	if len(parts) < 3 {
+	memberID = strings.TrimSpace(memberID)
+	if memberID == "" {
 		return "unknown"
 	}
 
-	issuer := strings.ToLower(parts[2])
-
-	// Match common patterns like "cn=ca.org1.example.com" or "o=org1.example.com"
-	for _, orgNum := range []string{"1", "2", "3", "4", "5"} {
-		patterns := []string{
-			fmt.Sprintf("org%s.", orgNum),
-			fmt.Sprintf("org%smsp", orgNum),
-		}
-		for _, pattern := range patterns {
-			if strings.Contains(issuer, pattern) {
-				return fmt.Sprintf("Org%sMSP", orgNum)
-			}
+	for _, candidate := range orgExtractionCandidates(memberID) {
+		if mspid := normalizeMSPIDCandidate(candidate); mspid != "" {
+			return mspid
 		}
 	}
 
 	return "unknown"
 }
 
-// countVotingOrgs returns how many unique orgs have voted
+// derives normalized Candidates
+// Called by: extractOrgFromMemberID.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func orgExtractionCandidates(memberID string) []string {
+	parts := strings.Split(memberID, "::")
+	var out []string
+	if len(parts) >= 3 {
+		out = append(out, splitDNValues(parts[2])...)
+	}
+	if len(parts) >= 2 {
+		out = append(out, splitDNValues(parts[1])...)
+	}
+	return out
+}
+
+// derives normalized DN Values
+// Called by: orgExtractionCandidates.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func splitDNValues(dn string) []string {
+	var out []string
+	for _, part := range strings.Split(dn, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if eq := strings.Index(part, "="); eq >= 0 {
+			value := strings.TrimSpace(part[eq+1:])
+			if value != "" {
+				out = append(out, value)
+			}
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
+// derives normalized MSPID Candidate
+// Called by: extractOrgFromMemberID.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func normalizeMSPIDCandidate(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+
+	// First pass: explicit MSP token (e.g. IRS1MSP).
+	for _, token := range candidateTokens(value) {
+		if strings.HasSuffix(token, "msp") && len(token) > len("msp") {
+			prefix := token[:len(token)-len("msp")]
+			if isOrgToken(prefix) {
+				return strings.ToUpper(prefix) + "MSP"
+			}
+		}
+	}
+
+	// Second pass: domain or org token (e.g. irs1 from ca.irs1.kit.edu).
+	for _, token := range candidateTokens(value) {
+		if isOrgToken(token) {
+			return strings.ToUpper(token) + "MSP"
+		}
+	}
+
+	return ""
+}
+
+// derives normalized Tokens
+// Called by: normalizeMSPIDCandidate.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func candidateTokens(value string) []string {
+	var out []string
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		switch r {
+		case ' ', '\t', '\n', '\r', ';', ':', '/', '\\', '@':
+			return true
+		default:
+			return false
+		}
+	})
+	for _, part := range parts {
+		part = strings.Trim(part, "\"'()[]{}")
+		if part == "" {
+			continue
+		}
+		for _, dot := range strings.Split(part, ".") {
+			dot = strings.Trim(dot, "\"'()[]{}")
+			if dot != "" {
+				out = append(out, dot)
+			}
+		}
+	}
+	return out
+}
+
+// evaluates org token structure (e.g. "irs1") so normalized MSPID derivation can identify org tokens and avoid false positives from non-org parts of the identity string.
+// Called by: normalizeMSPIDCandidate.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func isOrgToken(token string) bool {
+	token = strings.ToLower(strings.TrimSpace(token))
+	if token == "" {
+		return false
+	}
+	i := 0
+	for i < len(token) && token[i] >= 'a' && token[i] <= 'z' {
+		i++
+	}
+	if i < 3 || i >= len(token) {
+		return false
+	}
+	for j := i; j < len(token); j++ {
+		if token[j] < '0' || token[j] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// derives normalized Voting Orgs
+// Called by: validateMultiOrgVotes.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func countVotingOrgs(voters []string) int {
 	orgs := make(map[string]bool)
 	for _, voter := range voters {
@@ -3325,13 +4131,17 @@ func countVotingOrgs(voters []string) int {
 	return len(orgs)
 }
 
-// validateMemberOrgLimit - NO-OP: per-org member limits disabled
+// validates Member Org Limit
+// Called by: (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).ValidateMemberCandidate, (*DecentralizedPKIContract).executeJoinApproval.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func validateMemberOrgLimit(members []string, newMemberID string) error {
 	// Per-org member limits removed - always allow
 	return nil
 }
 
-// validateMultiOrgVotes checks if votes come from enough different orgs
+// validates Multi Org Votes
+// Called by: (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func validateMultiOrgVotes(voters []string) error {
 	if !EnableSecurityLimits {
 		return nil
@@ -3346,16 +4156,9 @@ func validateMultiOrgVotes(voters []string) error {
 	return nil
 }
 
-func removeNode(nodes []string, nodeID string) []string {
-	var result []string
-	for _, n := range nodes {
-		if n != nodeID {
-			result = append(result, n)
-		}
-	}
-	return result
-}
-
+// returns raw state for a key so operators can troubleshoot ledger data during testing and incident analysis.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) DebugGetState(
 	ctx contractapi.TransactionContextInterface,
 	key string,
@@ -3370,6 +4173,9 @@ func (c *DecentralizedPKIContract) DebugGetState(
 	return string(b), nil
 }
 
+// derives a stable Fabric-member identifier from client identity so vote, membership, and signer checks cannot drift across certificate encodings.
+// Called by: (*DecentralizedPKIContract).AcknowledgeDKG, (*DecentralizedPKIContract).AcknowledgeReshare, (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).CompleteDKG, (*DecentralizedPKIContract).CompleteReshare, (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).ForceReshare, (*DecentralizedPKIContract).InitiateDKG, (*DecentralizedPKIContract).ProposeRemoveMember, (*DecentralizedPKIContract).ProposeRevocation, (*DecentralizedPKIContract).RegisterPeerAddress, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SetMerkleEnabled, (*DecentralizedPKIContract).SubmitCSR, (*DecentralizedPKIContract).SubmitPartialSignature, (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).VoteOnRevocation, (*DecentralizedPKIContract).WhoAmI.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func (c *DecentralizedPKIContract) canonicalMemberID(ctx contractapi.TransactionContextInterface) (string, error) {
 	id, err := ctx.GetClientIdentity().GetID()
 	if err != nil {
@@ -3395,6 +4201,9 @@ func (c *DecentralizedPKIContract) canonicalMemberID(ctx contractapi.Transaction
 	return id, nil
 }
 
+// validates Canonical ID so invalid identities, signatures, and state transitions are rejected before commit.
+// Called by: (*DecentralizedPKIContract).ProposeRevocation.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func ensureCanonicalID(id string) error {
 	if strings.HasPrefix(id, "x509::") {
 		return nil
@@ -3408,6 +4217,88 @@ func ensureCanonicalID(id string) error {
 	return fmt.Errorf("id must be canonical member id (x509::...) or base64(x509::...), got: %s", id)
 }
 
+// retrieves Client Cert from world state
+// Called by: (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).ProposeRevocation, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SubmitCSR.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func getClientCert(ctx contractapi.TransactionContextInterface) (*x509.Certificate, string, error) {
+	cidClient, err := cid.New(ctx.GetStub())
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read client identity: %w", err)
+	}
+	cert, err := cidClient.GetX509Certificate()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse client certificate: %w", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	return cert, string(pemBytes), nil
+}
+
+// derives normalized Cert From PEM
+// Called by: (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func parseCertFromPEM(pemStr string) (*x509.Certificate, error) {
+	if strings.TrimSpace(pemStr) == "" {
+		return nil, fmt.Errorf("empty certificate")
+	}
+	block, _ := pem.Decode([]byte(pemStr))
+	if block == nil {
+		return nil, fmt.Errorf("invalid certificate PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+	return cert, nil
+}
+
+// enforces certificate validity bounds at transaction time
+// Called by: (*DecentralizedPKIContract).ProposeRevocation, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SubmitCSR, (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func validateCertAtTime(cert *x509.Certificate, at time.Time) error {
+	if at.Before(cert.NotBefore) || at.After(cert.NotAfter) {
+		return fmt.Errorf("certificate not valid at %s", at.UTC().Format(time.RFC3339))
+	}
+	return nil
+}
+
+// derives role From Cert values
+// Called by: (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, getClientRole.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func roleFromCert(cert *x509.Certificate) string {
+	for _, ou := range cert.Subject.OrganizationalUnit {
+		role := strings.ToLower(strings.TrimSpace(ou))
+		if role == "admin" {
+			return "member"
+		}
+		if role == "member" || role == "observer" {
+			return role
+		}
+	}
+	return ""
+}
+
+// retrieves Client Role from world state
+// Called by: (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).ProposeRevocation, (*DecentralizedPKIContract).RequestJoinCA, (*DecentralizedPKIContract).SubmitCSR.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func getClientRole(ctx contractapi.TransactionContextInterface, cert *x509.Certificate) (string, error) {
+	role := roleFromCert(cert)
+	if role == "" {
+		if attr, found, err := cid.GetAttributeValue(ctx.GetStub(), "role"); err == nil && found {
+			role = strings.ToLower(strings.TrimSpace(attr))
+		}
+	}
+	if role == "admin" {
+		role = "member"
+	}
+	if role != "member" && role != "observer" {
+		return "", fmt.Errorf("certificate role must be member or observer")
+	}
+	return role, nil
+}
+
+// Dynamic Threshold values
+// Called by: (*DecentralizedPKIContract).BootstrapJoinCA, (*DecentralizedPKIContract).ForceFreshDKG, (*DecentralizedPKIContract).ForceReshare, (*DecentralizedPKIContract).executeJoinApproval, (*DecentralizedPKIContract).executeMemberRemoval.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func calculateDynamicThreshold(memberCount int, percentageRequired int) int {
 	exactSigners := float64(memberCount) * float64(percentageRequired) / 100.0
 	requiredSigners := int(math.Ceil(exactSigners))
@@ -3416,9 +4307,36 @@ func calculateDynamicThreshold(memberCount int, percentageRequired int) int {
 		requiredSigners = 2
 	}
 
-	return requiredSigners - 1 // TSS threshold
+	return requiredSigners - 1 // TSS threshold (tss-lib uses t as the maximum number of corruped nodes (So the number of nodes that can be corrupted before malicious certificates can be issued not before the malicious nodes can do DoS!))
 }
 
+// evaluates whether Network Wide Approval is reached
+// Called by: (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).VoteOnRevocation, canStillReachNetworkWideApproval.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func hasNetworkWideApproval(votesFor, totalAuthorized, approvalThreshold int) bool {
+	if totalAuthorized <= 0 {
+		return false
+	}
+	return (votesFor * 100 / totalAuthorized) >= approvalThreshold
+}
+
+// evaluates whether Network Wide Approval is reachable
+// Called by: (*DecentralizedPKIContract).VoteOnCSR, (*DecentralizedPKIContract).VoteOnJoinRequest, (*DecentralizedPKIContract).VoteOnRemoveMember, (*DecentralizedPKIContract).VoteOnRevocation.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
+func canStillReachNetworkWideApproval(votesFor, votesReceived, totalAuthorized, approvalThreshold int) bool {
+	if totalAuthorized <= 0 {
+		return false
+	}
+	remaining := totalAuthorized - votesReceived
+	if remaining < 0 {
+		remaining = 0
+	}
+	maxPossibleVotesFor := votesFor + remaining
+	return hasNetworkWideApproval(maxPossibleVotesFor, totalAuthorized, approvalThreshold)
+}
+
+// Called by: internal helper paths (none in current static call graph).
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func hash(input string) string {
 	h := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(h[:])
@@ -3426,8 +4344,9 @@ func hash(input string) string {
 
 // ===================== TSS SIGNATURE VERIFICATION =====================
 
-// reconstructPublicKeyFromHex reconstructs an ECDSA public key from hex-encoded bytes
-// The public key is stored as uncompressed SEC1 format: 04 || X (32 bytes) || Y (32 bytes)
+// constructs Public Key From Hex
+// Called by: (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature, (*DecentralizedPKIContract).verifyTSSSignature.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func reconstructPublicKeyFromHex(pubKeyHex string) (*ecdsa.PublicKey, error) {
 	pubKeyBytes, err := hex.DecodeString(pubKeyHex)
 	if err != nil {
@@ -3483,8 +4402,9 @@ func reconstructPublicKeyFromHex(pubKeyHex string) (*ecdsa.PublicKey, error) {
 	}, nil
 }
 
-// verifyTSSSignature verifies a threshold signature against the CA's public key
-// This performs FULL ECDSA signature verification using Go's crypto libraries
+// validates threshold-signature material against the active CA public key so only cryptographically valid signature fragments are accepted.
+// Called by: (*DecentralizedPKIContract).VerifySignature.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func (c *DecentralizedPKIContract) verifyTSSSignature(
 	ctx contractapi.TransactionContextInterface,
 	csrHash string,
@@ -3498,9 +4418,7 @@ func (c *DecentralizedPKIContract) verifyTSSSignature(
 	}
 
 	if ca.PublicKey == "" {
-		// During bootstrap, public key may not be set yet
-		// Allow signatures during DKG/bootstrap phase
-		return true, nil
+		return false, fmt.Errorf("CA public key is not initialized")
 	}
 
 	// Validate signature format (hex-encoded, minimum length for ECDSA)
@@ -3530,13 +4448,14 @@ func (c *DecentralizedPKIContract) verifyTSSSignature(
 	if err != nil {
 		return false, fmt.Errorf("invalid CSR hash hex: %w", err)
 	}
+	if len(hashBytes) != sha256.Size {
+		return false, fmt.Errorf("invalid CSR hash length: got %d, expected %d", len(hashBytes), sha256.Size)
+	}
 
 	// Reconstruct the CA's public key from hex
 	pubKey, err := reconstructPublicKeyFromHex(ca.PublicKey)
 	if err != nil {
-		// If we can't reconstruct the key, log warning but allow during transition
-		// This handles the case where the public key format is not yet standardized
-		return true, nil // Fallback to allow during key format migration
+		return false, fmt.Errorf("failed to reconstruct CA public key: %w", err)
 	}
 
 	// Convert R and S bytes to big.Int for ECDSA verification
@@ -3553,7 +4472,9 @@ func (c *DecentralizedPKIContract) verifyTSSSignature(
 	return true, nil
 }
 
-// IsNodeRevoked checks if a node has been revoked and is no longer authorized
+// evaluates whether Node Revoked
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) IsNodeRevoked(
 	ctx contractapi.TransactionContextInterface,
 	nodeID string,
@@ -3565,7 +4486,7 @@ func (c *DecentralizedPKIContract) IsNodeRevoked(
 	}
 
 	if activeCertKey == nil {
-		// No active cert index — either never had one or it was revoked
+		// No active cert index â€” either never had one or it was revoked
 		// Check if there are any certs at all for this member by iterating
 		iter, err := ctx.GetStub().GetStateByRange("CERT:", "CERTz")
 		if err != nil {
@@ -3588,7 +4509,7 @@ func (c *DecentralizedPKIContract) IsNodeRevoked(
 		return false, nil
 	}
 
-	// Has an active cert index — check if that cert is actually active
+	// Has an active cert index â€” check if that cert is actually active
 	certJSON, err := ctx.GetStub().GetState("CERT:" + string(activeCertKey))
 	if err != nil {
 		return false, err
@@ -3605,7 +4526,9 @@ func (c *DecentralizedPKIContract) IsNodeRevoked(
 	return cert.IsRevoked, nil
 }
 
-// VerifySignature is a public function to verify a signature (for querying)
+// validates Signature so invalid identities, signatures, and state transitions are rejected before commit.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) VerifySignature(
 	ctx contractapi.TransactionContextInterface,
 	messageHash string,
@@ -3615,7 +4538,9 @@ func (c *DecentralizedPKIContract) VerifySignature(
 	return c.verifyTSSSignature(ctx, messageHash, signatureR, signatureS)
 }
 
-// GetCAPublicKey returns the current CA public key
+// retrieves CA Public Key from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetCAPublicKey(
 	ctx contractapi.TransactionContextInterface,
 ) (string, error) {
@@ -3628,7 +4553,7 @@ func (c *DecentralizedPKIContract) GetCAPublicKey(
 
 // ===================== SECURITY QUERY FUNCTIONS =====================
 
-// OrgMembershipStats represents membership statistics per organization
+// represents membership statistics per organization
 type OrgMembershipStats struct {
 	OrgID          string   `json:"orgId"`
 	MemberCount    int      `json:"memberCount"`
@@ -3637,7 +4562,9 @@ type OrgMembershipStats struct {
 	Members        []string `json:"members"`
 }
 
-// GetOrgMembershipStats returns membership statistics for all organizations
+// retrieves Org Membership Stats from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetOrgMembershipStats(
 	ctx contractapi.TransactionContextInterface,
 ) ([]OrgMembershipStats, error) {
@@ -3653,16 +4580,21 @@ func (c *DecentralizedPKIContract) GetOrgMembershipStats(
 		orgMembers[org] = append(orgMembers[org], member)
 	}
 
-	// Build stats for all potential orgs (1-5)
 	var stats []OrgMembershipStats
-	for _, orgNum := range []string{"1", "2", "3", "4", "5"} {
-		orgID := fmt.Sprintf("Org%sMSP", orgNum)
-		members := orgMembers[orgID]
-		count := len(members)
+	var orgIDs []string
+	for orgID := range orgMembers {
+		if orgID == "unknown" {
+			continue
+		}
+		orgIDs = append(orgIDs, orgID)
+	}
+	sort.Strings(orgIDs)
 
+	for _, orgID := range orgIDs {
+		members := orgMembers[orgID]
 		stats = append(stats, OrgMembershipStats{
 			OrgID:          orgID,
-			MemberCount:    count,
+			MemberCount:    len(members),
 			MaxMembers:     -1, // No limit
 			RemainingSlots: -1, // No limit
 			Members:        members,
@@ -3683,14 +4615,16 @@ func (c *DecentralizedPKIContract) GetOrgMembershipStats(
 	return stats, nil
 }
 
-// SecurityConfig represents the current security configuration
+// represents the current security configuration
 type SecurityConfig struct {
 	MaxMembersPerOrg      int  `json:"maxMembersPerOrg"`
 	MinOrgsForApproval    int  `json:"minOrgsForApproval"`
 	SecurityLimitsEnabled bool `json:"securityLimitsEnabled"`
 }
 
-// GetSecurityConfig returns the current security configuration
+// retrieves Security Config from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetSecurityConfig(
 	ctx contractapi.TransactionContextInterface,
 ) (SecurityConfig, error) {
@@ -3701,13 +4635,15 @@ func (c *DecentralizedPKIContract) GetSecurityConfig(
 	}, nil
 }
 
-// ValidationResult contains the result of a validation check
+// contains the result of a validation check
 type ValidationResult struct {
 	Valid   bool   `json:"valid"`
 	Message string `json:"message"`
 }
 
-// ValidateMemberCandidate checks if a candidate member can be added
+// validates Member Candidate so invalid identities, signatures, and state transitions are rejected before commit.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) ValidateMemberCandidate(
 	ctx contractapi.TransactionContextInterface,
 	candidateID string,
@@ -3733,12 +4669,16 @@ func (c *DecentralizedPKIContract) ValidateMemberCandidate(
 
 // ===================== CERTIFICATE MERKLE TREE =====================
 
+// derives config key for Merkle tree settings
+// Called by: (*DecentralizedPKIContract).GetMerkleEnabled, (*DecentralizedPKIContract).SetMerkleEnabled.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func merkleConfigKey(caID string) string {
 	return merkleConfigKeyPrefix + caID
 }
 
-// GetMerkleEnabled returns whether the certificate Merkle tree is enabled.
-// Defaults to true if no config is stored yet.
+// retrieves Merkle Enabled from world state
+// Called by: (*DecentralizedPKIContract).GetCertificateMerkleProof, (*DecentralizedPKIContract).GetCertificateMerkleRoot, (*DecentralizedPKIContract).updateCertificateMerkleTree.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetMerkleEnabled(
 	ctx contractapi.TransactionContextInterface,
 	caID string,
@@ -3758,7 +4698,9 @@ func (c *DecentralizedPKIContract) GetMerkleEnabled(
 	return cfg.Enabled, nil
 }
 
-// SetMerkleEnabled updates the Merkle tree setting for the CA (members only).
+// applies controlled state transitions for Merkle Enabled
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) SetMerkleEnabled(
 	ctx contractapi.TransactionContextInterface,
 	caID string,
@@ -3803,9 +4745,9 @@ func (c *DecentralizedPKIContract) SetMerkleEnabled(
 	return ctx.GetStub().PutState(key, stateJSON)
 }
 
-// updateCertificateMerkleTree recomputes the Merkle root over all active (non-revoked)
-// certificate hashes and stores the result on-chain. Should be called after every
-// certificate registration or revocation.
+// recomputes and persists Merkle tree artifacts after certificate state changes
+// Called by: (*DecentralizedPKIContract).RegisterCombinedCertificateWithSignature, (*DecentralizedPKIContract).executeRevocation.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func (c *DecentralizedPKIContract) updateCertificateMerkleTree(
 	ctx contractapi.TransactionContextInterface,
 	action string,
@@ -3926,8 +4868,9 @@ func (c *DecentralizedPKIContract) updateCertificateMerkleTree(
 	return ctx.GetStub().PutState("MERKLE:CERTS", stateJSON)
 }
 
-// computeMerkleRoot computes the Merkle root from a sorted list of hex-encoded leaf hashes.
-// Returns the hex-encoded root hash; returns empty string for empty input.
+// constructs Merkle Root
+// Called by: (*DecentralizedPKIContract).updateCertificateMerkleTree.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func computeMerkleRoot(leaves []string) string {
 	if len(leaves) == 0 {
 		return ""
@@ -3970,7 +4913,9 @@ func computeMerkleRoot(leaves []string) string {
 	return hex.EncodeToString(level[0])
 }
 
-// GetCertificateMerkleRoot returns the current Merkle root of all active certificates.
+// retrieves Certificate Merkle Root from world state
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetCertificateMerkleRoot(
 	ctx contractapi.TransactionContextInterface,
 ) (*CertificateMerkleState, error) {
@@ -3997,8 +4942,9 @@ func (c *DecentralizedPKIContract) GetCertificateMerkleRoot(
 	return &state, nil
 }
 
-// GetCertificateMerkleProof returns the Merkle inclusion proof for a specific certificate.
-// The proof contains sibling hashes needed to recompute the root from the leaf.
+// returns an inclusion proof for a certificate hash so clients can independently verify membership in the on-ledger Merkle root.
+// Called by: external Fabric client transaction invocation.
+// Triggered: Fabric chaincode invoke/query request for this transaction function.
 func (c *DecentralizedPKIContract) GetCertificateMerkleProof(
 	ctx contractapi.TransactionContextInterface,
 	certHash string,
@@ -4053,13 +4999,15 @@ func (c *DecentralizedPKIContract) GetCertificateMerkleProof(
 	return string(proofJSON), nil
 }
 
-// MerkleProofNode represents one step in a Merkle inclusion proof.
+// represents one step in a Merkle inclusion proof.
 type MerkleProofNode struct {
 	Hash     string `json:"hash"`
 	Position string `json:"position"` // "left" or "right"
 }
 
-// buildMerkleProof returns the sibling hashes needed to verify inclusion.
+// constructs Merkle Proof
+// Called by: (*DecentralizedPKIContract).GetCertificateMerkleProof.
+// Triggered: internal chaincode helper during governance, DKG/reshare, CSR signing, or query processing.
 func buildMerkleProof(leaves []string, targetIndex int) []MerkleProofNode {
 	if len(leaves) <= 1 {
 		return nil
@@ -4125,6 +5073,9 @@ func buildMerkleProof(leaves []string, targetIndex int) []MerkleProofNode {
 	return proof
 }
 
+// starts the chaincode contract runtime so Fabric peers can route invoke/query requests into the decentralized PKI contract methods.
+// Called by: entrypoint.
+// Triggered: chaincode process startup and contract registration.
 func main() {
 	chaincode, err := contractapi.NewChaincode(&DecentralizedPKIContract{})
 	if err != nil {

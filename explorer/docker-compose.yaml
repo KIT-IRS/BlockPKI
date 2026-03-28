@@ -1,0 +1,59 @@
+﻿# SPDX-License-Identifier: Apache-2.0
+
+volumes:
+  pgdata:
+  walletstore:
+
+networks:
+  fabric_net:
+    name: fabric_net
+    external: true
+
+services:
+
+  explorerdb.fabric_net:
+    image: ghcr.io/hyperledger-labs/explorer-db:latest
+    container_name: explorerdb.fabric_net
+    hostname: explorerdb.fabric_net
+    environment:
+      - DATABASE_DATABASE=fabricexplorer
+      - DATABASE_USERNAME=hppoc
+      - DATABASE_PASSWORD=password
+    healthcheck:
+      test: "pg_isready -h localhost -p 5432 -q -U postgres"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - fabric_net
+
+  explorer.fabric_net:
+    image: ghcr.io/hyperledger-labs/explorer:latest
+    container_name: explorer.fabric_net
+    hostname: explorer.fabric_net
+    environment:
+      - DATABASE_HOST=explorerdb.fabric_net
+      - DATABASE_DATABASE=fabricexplorer
+      - DATABASE_USERNAME=hppoc
+      - DATABASE_PASSWD=password
+      - LOG_LEVEL_APP=info
+      - LOG_LEVEL_DB=info
+      - LOG_LEVEL_CONSOLE=debug
+      - LOG_CONSOLE_STDOUT=true
+      - DISCOVERY_AS_LOCALHOST=false
+      - PORT=8080
+    volumes:
+      - ./config.json:/opt/explorer/app/platform/fabric/config.json
+      - ./connection-profile:/opt/explorer/app/platform/fabric/connection-profile
+      - ./organizations:/tmp/crypto
+      - walletstore:/opt/explorer/wallet
+    ports:
+      - "8080:8080"
+    depends_on:
+      explorerdb.fabric_net:
+        condition: service_healthy
+    networks:
+      - fabric_net
+

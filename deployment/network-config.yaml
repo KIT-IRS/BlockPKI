@@ -3,146 +3,157 @@
 # ============================================================================
 #
 # This file defines the ENTIRE network topology. All scripts and compose files
-# are generated or parameterized from this single source of truth.
+# are generated from this source of truth.
 #
 # After editing, run:  ./generate.sh
 # Then deploy with:    ./deploy.sh
 #
-# INSTRUCTIONS:
-#   1. Set the IPs of your hosts under 'hosts:'
-#   2. Assign orgs to hosts under each host's 'orgs:' list
-#   3. The orderer is always on the first host with orderer: true
-#   4. Run generate.sh to produce crypto, compose files, and bundles
+# Notes:
+# - Org keys use irsN naming (irs1, irs2, ...)
+# - Peer container names stay peer0, peer1, ...
+# - Domains use *.kit.edu (for example peer0.irs1.kit.edu)
 # ============================================================================
 
-# --- Host Definitions -------------------------------------------------------
-# Each host is a physical machine (PC, Pi, VM, etc.)
-# The 'ip' is the LAN-reachable address of that machine.
+
 hosts:
-  pc:
-    ip: "192.168.1.180"       # <-- CHANGE to your PC's LAN IP
-    arch: amd64               # amd64 or arm64 (used to build tss_peer)
-    orderer: true             # This host runs the Raft orderer
-    orgs: [org1, org2]        # Fabric peers + TSS peers on this host
 
-  pi1:
-    ip: "192.168.1.165"       # <-- CHANGE to your Pi's LAN IP
-    arch: arm64               # amd64 or arm64 (used to build tss_peer)
+#  pc:
+#    ip: "192.168.1.180"       # change 
+#    arch: amd64               # amd64 or arm64 
+#    orderer: true             
+#    orgs: []     
+
+  #pi1:
+  #  ip: "192.168.1.161"       # change 
+  #  arch: arm64
+  #  orderer: false
+  #  orgs: [irs1]
+
+  pi2:
+    ip: "192.168.1.162"       # change
+    arch: arm64
     orderer: false
-    orgs: [org3]
+    orgs: [irs2]
 
-  # Uncomment to add more hosts:
-  # pi2:
-  #   ip: "192.168.1.161"
-  #   orderer: false
-  #   orgs: [org4]
-  #
-  # pi3:
-  #   ip: "192.168.1.162"
-  #   orderer: false
-  #   orgs: [org5, org6]      # Multiple orgs on one host is fine
-  
-  # pi4:
-  #   ip: "192.168.1.163"
-  #   orderer: false
-  #   orgs: [org5, org6]      # Multiple orgs on one host is fine
+  pi3:
+    ip: "192.168.1.163"       # change 
+    arch: arm64
+    orderer: true
+    orgs: [irs3]
 
-  # pi5:
-  #   ip: "192.168.1.164"
-  #   orderer: false
-  #   orgs: [org5, org6]      # Multiple orgs on one host is fine
+  pi4:
+    ip: "192.168.1.164"       # change 
+    arch: arm64
+    orderer: false
+    orgs: [irs4]
 
-# --- Organization Definitions -----------------------------------------------
-# Ports are per-host unique. If two orgs share a host, use different ports.
+  pi5:
+    ip: "192.168.1.165"       # change 
+    arch: arm64
+    orderer: false
+    orgs: [irs5]
+
 orgs:
-  org1:
-    mspid: Org1MSP
-    domain: org1.example.com
-    peer_port: 7051
-    chaincode_port: 7052
-    operations_port: 9444
-    peers: 1
-    users: 1                 # client identities to generate (User1..UserN) for TSS peers/cert-client
-    p2p_port: 6001            # TSS peer-to-peer
-    webui_port: 8081          # TSS web dashboard
-    join_mode: none           # member|observer|request|none
-    # msp_user: User1@org1.example.com  # default identity for TSS peer (if no tss_nodes override)
+  #irs1:
+  #  mspid: IRS1MSP
+  #  domain: irs1.kit.edu
+  #  peer_port: 7051
+  #  chaincode_port: 7052
+  #  operations_port: 9444
+  #  peers: 1
+  #  member_users: 1       
+  #  observer_users: 1       
+  #  p2p_port: 6001
+  #  webui_port: 8081
+  #  join_mode: none           # member,request,none
+
+    ####  Overrides (optional)  ####
+    # msp_user: Member1@irs1.kit.edu  # default identity for TSS peer
+    # Optional per-user OU role overrides (OpenSSL only)
+    # client_roles:
+    #   Member1@irs1.kit.edu: member
+    #   Observer1@irs1.kit.edu: observer
     # Optional per-org TSS nodes (multiple on same host)
     # tss_nodes:
     #   - name: a
     #     join_mode: member
     #     p2p_port: 6001
     #     webui_port: 8081
-    #     state_dir: state/org1/a
-    #     msp_user: User1@org1.example.com
-    #   - name: obs
-    #     join_mode: observer
-    #     p2p_port: 6011
-    #     webui_port: 8091
-    #     state_dir: state/org1/obs
-    #     msp_user: User2@org1.example.com
+    #     state_dir: state/irs1/a
+    #     msp_user: Member1@irs1.kit.edu
     # Optional subject overrides for OpenSSL crypto generation
     # subject:
     #   c: DE
     #   st: Baden-Wuerttemberg
     #   l: Karlsruhe
     #   o: IRS-1
-    #   admin_cn: Member@org1.example.com
-    #   peer_cn_template: "member{{index}}.org1.example.com"
+    #   admin_cn: Admin@irs1.kit.edu
+    #   peer_cn_template: "peer{{index}}.irs1.kit.edu"
 
-  org2:
-    mspid: Org2MSP
-    domain: org2.example.com
-    peer_port: 9051
-    chaincode_port: 9052
-    operations_port: 9445
-    peers: 1
-    users: 1
-    p2p_port: 6002
-    webui_port: 8082
-    join_mode: none 
-
-  org3:
-    mspid: Org3MSP
-    domain: org3.example.com
-    peer_port: 7051           # First org on pi1, so 7051 is free
+  irs2:
+    mspid: IRS2MSP
+    domain: irs2.kit.edu
+    peer_port: 7051
     chaincode_port: 7052
-    operations_port: 9446
+    operations_port: 9444
     peers: 1
-    users: 1
-    p2p_port: 6003
-    webui_port: 8083
-    join_mode: none 
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
 
-  # org4:
-  #   mspid: Org4MSP
-  #   domain: org4.example.com
-  #   peer_port: 7051
-  #   chaincode_port: 7052
-  #   operations_port: 9444
-  #   p2p_port: 6001
-  #   webui_port: 8080
+  irs3:
+    mspid: IRS3MSP
+    domain: irs3.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
 
-# --- Orderer Configuration --------------------------------------------------
+  irs4:
+    mspid: IRS4MSP
+    domain: irs4.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
+
+  irs5:
+    mspid: IRS5MSP
+    domain: irs5.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
+
 orderer:
-  hostname: orderer.example.com
+  hostname: orderer.kit.edu
   port: 7050
   admin_port: 7053
   operations_port: 9443
-  type: etcdraft              # raft consensus
+  type: etcdraft
 
-# --- Channel & Chaincode ----------------------------------------------------
 channel:
   name: mychannel
   chaincode_name: bpki
   chaincode_path: ../chaincode
   chaincode_lang: golang
 
-# --- TSS Parameters ----------------------------------------------------------
-tss:
-  threshold: 1                # t-of-n: need t+1 signers (1 means 2-of-n)
-  curve: P-256
-
-# --- Feature Flags -----------------------------------------------------------
 features:
-  merkle_tree: true           # set false to disable on-chain Merkle updates
+  merkle_tree: true
