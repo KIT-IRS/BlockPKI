@@ -46,7 +46,7 @@ services:
       - PORT=8080
     volumes:
       - ./config.json:/opt/explorer/app/platform/fabric/config.json
-      - ./connection-profile:/opt/explorer/app/platform/fabric/connection-profile
+      - ./connection:/opt/explorer/app/platform/fabric/connection
       - ./organizations:/tmp/crypto
       - walletstore:/opt/explorer/wallet
     ports:
@@ -56,4 +56,5 @@ services:
         condition: service_healthy
     networks:
       - fabric_net
+
 
