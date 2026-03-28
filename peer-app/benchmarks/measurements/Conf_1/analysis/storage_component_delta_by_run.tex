@@ -1,0 +1,161 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{groupplot}[group style={group size=2 by 1}]
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={orderer volume},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Mean Delta Bytes},
+ymajorgrids,
+ymin=0, ymax=173730.75,
+ytick style={color=darkslategray51},
+ytick={0,20000,40000,60000,80000,100000,120000,140000,160000,180000},
+yticklabels={0 B,20.0 KB,40.0 KB,60.0 KB,80.0 KB,100.0 KB,120.0 KB,140.0 KB,160.0 KB,180.0 KB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 89569
+2 89566
+3 89633
+4 89617
+5 81817
+6 89622
+7 89589
+8 74184
+9 89624
+10 81838
+};
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 139632
+2 146178
+3 140214
+4 155374
+5 148254
+6 155890
+7 136368
+8 156395
+9 167491
+10 137126
+};
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 92668
+2 84037
+3 93326
+4 92820
+5 93949
+6 101376
+7 101724
+8 94178
+9 93150
+10 102705
+};
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 42701
+2 42696
+3 42732
+4 49443
+5 42752
+6 49448
+7 49455
+8 49448
+9 49456
+10 49455
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={peer volume},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=0, ymax=205534.55,
+ytick style={color=darkslategray51},
+ytick={0,25000,50000,75000,100000,125000,150000,175000,200000,225000},
+yticklabels={0 B,25.0 KB,50.0 KB,75.0 KB,100.0 KB,125.0 KB,150.0 KB,175.0 KB,200.0 KB,225.0 KB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 110021
+2 110010
+3 110084
+4 110114
+5 102160
+6 110119
+7 110062
+8 94478
+9 110177
+10 102259
+};
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 167077
+2 173768
+3 167674
+4 183172
+5 175929
+6 183694
+7 164044
+8 184276
+9 198199
+10 164809
+};
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 110334
+2 101605
+3 111013
+4 110560
+5 111690
+6 119246
+7 119625
+8 111981
+9 110975
+10 120647
+};
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 51501
+2 51488
+3 51535
+4 58390
+5 51568
+6 58390
+7 58410
+8 58422
+9 58433
+10 58431
+};
+\end{groupplot}
+
+\draw ({$(current bounding box.south west)!0.5!(current bounding box.south east)$}|-{$(current bounding box.south west)!0.98!(current bounding box.north west)$}) node[
+  scale=0.6,
+  anchor=north,
+  text=black,
+  rotate=0.0
+]{Storage Component Delta by Run and Workflow (/var/lib/docker/volumes Only)};
+\end{tikzpicture}

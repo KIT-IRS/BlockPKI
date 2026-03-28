@@ -1,0 +1,98 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Logical + Serialized TX + Block Overhead (Combined)},
+x grid style={lightgray204},
+xmin=-1.09, xmax=14.09,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3,4,5,6,7,8,9,10,11,12,13},
+xticklabel style={rotate=35.0,anchor=east},
+xticklabels={
+  csr|csr_submitted,
+  csr|csr_voted,
+  csr|threshold_reached,
+  csr|signing_initiated,
+  csr|certificate_registered,
+  join|member_join_requested,
+  join|member_join_voted,
+  join|member_join_approved,
+  removal|member_removal_proposed,
+  removal|member_removal_voted,
+  removal|member_removed,
+  revocation|revocation_proposed,
+  revocation|revocation_voted,
+  revocation|certificate_revoked
+},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Bytes (mean per operation)},
+ymajorgrids,
+ymin=0, ymax=14034.3525,
+ytick style={color=darkslategray51},
+ytick={0,2000,4000,6000,8000,10000,12000,14000,16000},
+yticklabels={0 B,2.0 KB,4.0 KB,6.0 KB,8.0 KB,10.0 KB,12.0 KB,14.0 KB,16.0 KB}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.4,0) rectangle (axis cs:0.4,3424.4);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{logical_state_write}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.6,0) rectangle (axis cs:1.4,9078.6);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.6,0) rectangle (axis cs:2.4,0);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.6,0) rectangle (axis cs:3.4,0);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:3.6,0) rectangle (axis cs:4.4,11841.6);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:4.6,0) rectangle (axis cs:5.4,2875.2);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:5.6,0) rectangle (axis cs:6.4,3811);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:6.6,0) rectangle (axis cs:7.4,2695.8);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:7.6,0) rectangle (axis cs:8.4,1275.6);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:8.6,0) rectangle (axis cs:9.4,4789);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:9.6,0) rectangle (axis cs:10.4,2343.8);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:10.6,0) rectangle (axis cs:11.4,1213.6);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:11.6,0) rectangle (axis cs:12.4,4665);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:12.6,0) rectangle (axis cs:13.4,6782.6);
+\draw[draw=none,fill=steelblue70100170] (axis cs:-0.4,3424.4) rectangle (axis cs:0.4,7511.2);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{serialized_tx_overhead}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:0.6,9078.6) rectangle (axis cs:1.4,9078.6);
+\draw[draw=none,fill=steelblue70100170] (axis cs:1.6,0) rectangle (axis cs:2.4,6336.3);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.6,0) rectangle (axis cs:3.4,8217.2);
+\draw[draw=none,fill=steelblue70100170] (axis cs:3.6,11841.6) rectangle (axis cs:4.4,12878.3);
+\draw[draw=none,fill=steelblue70100170] (axis cs:4.6,2875.2) rectangle (axis cs:5.4,7675.7);
+\draw[draw=none,fill=steelblue70100170] (axis cs:5.6,3811) rectangle (axis cs:6.4,7901.5);
+\draw[draw=none,fill=steelblue70100170] (axis cs:6.6,2695.8) rectangle (axis cs:7.4,11384.2);
+\draw[draw=none,fill=steelblue70100170] (axis cs:7.6,1275.6) rectangle (axis cs:8.4,7250.6);
+\draw[draw=none,fill=steelblue70100170] (axis cs:8.6,4789) rectangle (axis cs:9.4,7350.2);
+\draw[draw=none,fill=steelblue70100170] (axis cs:9.6,2343.8) rectangle (axis cs:10.4,10433.1);
+\draw[draw=none,fill=steelblue70100170] (axis cs:10.6,1213.6) rectangle (axis cs:11.4,6156.6);
+\draw[draw=none,fill=steelblue70100170] (axis cs:11.6,4665) rectangle (axis cs:12.4,6895);
+\draw[draw=none,fill=steelblue70100170] (axis cs:12.6,6782.6) rectangle (axis cs:13.4,10735.7);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:-0.4,7511.2) rectangle (axis cs:0.4,8481.7);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkgoldenrod16713046}
+\addlegendentry{allocated_block_overhead}
+
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:0.6,9078.6) rectangle (axis cs:1.4,9364.8666667);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:1.6,6336.3) rectangle (axis cs:2.4,6582.15);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:2.6,8217.2) rectangle (axis cs:3.4,8946.05);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:3.6,12878.3) rectangle (axis cs:4.4,13366.05);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:4.6,7675.7) rectangle (axis cs:5.4,8645.9);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:5.6,7901.5) rectangle (axis cs:6.4,8227.9083333);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:6.6,11384.2) rectangle (axis cs:7.4,11710.6666666);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:7.6,7250.6) rectangle (axis cs:8.4,8221.3);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:8.6,7350.2) rectangle (axis cs:9.4,7620.3166667);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:9.6,10433.1) rectangle (axis cs:10.4,10759.6333334);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:10.6,6156.6) rectangle (axis cs:11.4,7127);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:11.6,6895) rectangle (axis cs:12.4,7140.9);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:12.6,10735.7) rectangle (axis cs:13.4,11062.1666666);
+\end{axis}
+
+\end{tikzpicture}

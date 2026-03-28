@@ -1,0 +1,95 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.91,0.5)},
+  anchor=east,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Workflow Duration by Run (V2)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Client Duration (s)},
+ymajorgrids,
+ymin=0, ymax=242.93049335,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 71.752971
+2 74.437278
+3 74.421722
+4 70.688007
+5 72.492151
+6 66.065178
+7 72.312588
+8 72.416867
+9 68.431432
+10 74.793039
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 20.910048
+2 18.881319
+3 18.844805
+4 16.947806
+5 18.826023
+6 18.88521
+7 18.951721
+8 18.974921
+9 20.948615
+10 18.920327
+};
+\addlegendentry{revocation}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 205.069683
+2 217.115186
+3 190.761056
+4 192.828209
+5 219.346042
+6 192.993606
+7 203.054957
+8 174.840989
+9 174.800941
+10 195.004693
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 214.004951
+2 224.370367
+3 206.163791
+4 216.331175
+5 193.987446
+6 232.169413
+7 218.225081
+8 210.242927
+9 216.214872
+10 206.225975
+};
+\addlegendentry{join}
+\end{axis}
+
+\end{tikzpicture}

@@ -1,0 +1,72 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Serialized TX/Block Overhead Ratio Means (Combined)},
+x grid style={lightgray204},
+xmin=-0.968, xmax=11.968,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3,4,5,6,7,8,9,10,11},
+xticklabel style={rotate=35.0,anchor=east},
+xticklabels={
+  csr|certificate_registered,
+  csr|csr_submitted,
+  csr|csr_voted,
+  join|member_join_approved,
+  join|member_join_requested,
+  join|member_join_voted,
+  removal|member_removal_proposed,
+  removal|member_removal_voted,
+  removal|member_removed,
+  revocation|certificate_revoked,
+  revocation|revocation_proposed,
+  revocation|revocation_voted
+},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Mean ratio},
+ymajorgrids,
+ymin=0, ymax=7.59166913112912,
+ytick style={color=darkslategray51}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.38,0) rectangle (axis cs:0,0.996462137515908);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{tx/logical}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.62,0) rectangle (axis cs:1,2.18939330753518);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.62,0) rectangle (axis cs:2,0.17643702306337);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.62,0) rectangle (axis cs:3,2.61934604904632);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:3.62,0) rectangle (axis cs:4,3.01193919517645);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:4.62,0) rectangle (axis cs:5,0.203163103049435);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:5.62,0) rectangle (axis cs:6,6.46926347075176);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:6.62,0) rectangle (axis cs:7,0.270161881599778);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:7.62,0) rectangle (axis cs:8,2.5954215304799);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:8.62,0) rectangle (axis cs:9,2.51433376658807);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:9.62,0) rectangle (axis cs:10,5.07572793987501);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:10.62,0) rectangle (axis cs:11,0.252491553334445);
+\draw[draw=none,fill=steelblue70100170] (axis cs:-2.77555756156289e-17,0) rectangle (axis cs:0.38,1.01389209852452);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{tx+block/logical}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:1,0) rectangle (axis cs:1.38,2.47201218818503);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2,0) rectangle (axis cs:2.38,0.17994976686559);
+\draw[draw=none,fill=steelblue70100170] (axis cs:3,0) rectangle (axis cs:3.38,2.64543537753282);
+\draw[draw=none,fill=steelblue70100170] (axis cs:4,0) rectangle (axis cs:4.38,3.34861385614116);
+\draw[draw=none,fill=steelblue70100170] (axis cs:5,0) rectangle (axis cs:5.38,0.207533139034076);
+\draw[draw=none,fill=steelblue70100170] (axis cs:6,0) rectangle (axis cs:6.38,7.23016107726583);
+\draw[draw=none,fill=steelblue70100170] (axis cs:7,0) rectangle (axis cs:7.38,0.275505599300375);
+\draw[draw=none,fill=steelblue70100170] (axis cs:8,0) rectangle (axis cs:8.38,2.63020114055772);
+\draw[draw=none,fill=steelblue70100170] (axis cs:9,0) rectangle (axis cs:9.38,2.55747331165106);
+\draw[draw=none,fill=steelblue70100170] (axis cs:10,0) rectangle (axis cs:10.38,5.87566285893229);
+\draw[draw=none,fill=steelblue70100170] (axis cs:11,0) rectangle (axis cs:11.38,0.257825216234412);
+\end{axis}
+
+\end{tikzpicture}

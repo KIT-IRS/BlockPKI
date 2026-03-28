@@ -1,0 +1,465 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{groupplot}[group style={group size=3 by 1}]
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={tss MEM},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Percent of host total RAM},
+ymajorgrids,
+ymin=0.3075, ymax=0.3625,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 0.34
+1.225 0.34
+1.225 0.35
+0.775 0.35
+0.775 0.34
+};
+\addplot [black]
+table {%
+1 0.34
+1 0.34
+};
+\addplot [black]
+table {%
+1 0.35
+1 0.35
+};
+\addplot [black]
+table {%
+0.8875 0.34
+1.1125 0.34
+};
+\addplot [black]
+table {%
+0.8875 0.35
+1.1125 0.35
+};
+\addplot [black]
+table {%
+1.775 0.35
+2.225 0.35
+2.225 0.36
+1.775 0.36
+1.775 0.35
+};
+\addplot [black]
+table {%
+2 0.35
+2 0.35
+};
+\addplot [black]
+table {%
+2 0.36
+2 0.36
+};
+\addplot [black]
+table {%
+1.8875 0.35
+2.1125 0.35
+};
+\addplot [black]
+table {%
+1.8875 0.36
+2.1125 0.36
+};
+\addplot [black]
+table {%
+2.775 0.31
+3.225 0.31
+3.225 0.31
+2.775 0.31
+2.775 0.31
+};
+\addplot [black]
+table {%
+3 0.31
+3 0.31
+};
+\addplot [black]
+table {%
+3 0.31
+3 0.31
+};
+\addplot [black]
+table {%
+2.8875 0.31
+3.1125 0.31
+};
+\addplot [black]
+table {%
+2.8875 0.31
+3.1125 0.31
+};
+\addplot [black]
+table {%
+3.775 0.31
+4.225 0.31
+4.225 0.31
+3.775 0.31
+3.775 0.31
+};
+\addplot [black]
+table {%
+4 0.31
+4 0.31
+};
+\addplot [black]
+table {%
+4 0.31
+4 0.31
+};
+\addplot [black]
+table {%
+3.8875 0.31
+4.1125 0.31
+};
+\addplot [black]
+table {%
+3.8875 0.31
+4.1125 0.31
+};
+\addplot [steelblue70100170]
+table {%
+0.775 0.345
+1.225 0.345
+};
+\addplot [steelblue70100170]
+table {%
+1.775 0.35
+2.225 0.35
+};
+\addplot [steelblue70100170]
+table {%
+2.775 0.31
+3.225 0.31
+};
+\addplot [steelblue70100170]
+table {%
+3.775 0.31
+4.225 0.31
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={peer MEM},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=2.096, ymax=2.184,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 2.1325
+1.225 2.1325
+1.225 2.16
+0.775 2.16
+0.775 2.1325
+};
+\addplot [black]
+table {%
+1 2.1325
+1 2.13
+};
+\addplot [black]
+table {%
+1 2.16
+1 2.16
+};
+\addplot [black]
+table {%
+0.8875 2.13
+1.1125 2.13
+};
+\addplot [black]
+table {%
+0.8875 2.16
+1.1125 2.16
+};
+\addplot [black]
+table {%
+1.775 2.135
+2.225 2.135
+2.225 2.16
+1.775 2.16
+1.775 2.135
+};
+\addplot [black]
+table {%
+2 2.135
+2 2.1
+};
+\addplot [black]
+table {%
+2 2.16
+2 2.18
+};
+\addplot [black]
+table {%
+1.8875 2.1
+2.1125 2.1
+};
+\addplot [black]
+table {%
+1.8875 2.18
+2.1125 2.18
+};
+\addplot [black]
+table {%
+2.775 2.1325
+3.225 2.1325
+3.225 2.16
+2.775 2.16
+2.775 2.1325
+};
+\addplot [black]
+table {%
+3 2.1325
+3 2.13
+};
+\addplot [black]
+table {%
+3 2.16
+3 2.17
+};
+\addplot [black]
+table {%
+2.8875 2.13
+3.1125 2.13
+};
+\addplot [black]
+table {%
+2.8875 2.17
+3.1125 2.17
+};
+\addplot [black]
+table {%
+3.775 2.1325
+4.225 2.1325
+4.225 2.16
+3.775 2.16
+3.775 2.1325
+};
+\addplot [black]
+table {%
+4 2.1325
+4 2.13
+};
+\addplot [black]
+table {%
+4 2.16
+4 2.17
+};
+\addplot [black]
+table {%
+3.8875 2.13
+4.1125 2.13
+};
+\addplot [black]
+table {%
+3.8875 2.17
+4.1125 2.17
+};
+\addplot [steelblue70100170]
+table {%
+0.775 2.155
+1.225 2.155
+};
+\addplot [steelblue70100170]
+table {%
+1.775 2.16
+2.225 2.16
+};
+\addplot [steelblue70100170]
+table {%
+2.775 2.16
+3.225 2.16
+};
+\addplot [steelblue70100170]
+table {%
+3.775 2.155
+4.225 2.155
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={orderer MEM},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=0.7065, ymax=1.0035,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 0.8025
+1.225 0.8025
+1.225 0.9275
+0.775 0.9275
+0.775 0.8025
+};
+\addplot [black]
+table {%
+1 0.8025
+1 0.72
+};
+\addplot [black]
+table {%
+1 0.9275
+1 0.98
+};
+\addplot [black]
+table {%
+0.8875 0.72
+1.1125 0.72
+};
+\addplot [black]
+table {%
+0.8875 0.98
+1.1125 0.98
+};
+\addplot [black]
+table {%
+1.775 0.81
+2.225 0.81
+2.225 0.9275
+1.775 0.9275
+1.775 0.81
+};
+\addplot [black]
+table {%
+2 0.81
+2 0.75
+};
+\addplot [black]
+table {%
+2 0.9275
+2 0.99
+};
+\addplot [black]
+table {%
+1.8875 0.75
+2.1125 0.75
+};
+\addplot [black]
+table {%
+1.8875 0.99
+2.1125 0.99
+};
+\addplot [black]
+table {%
+2.775 0.81
+3.225 0.81
+3.225 0.9275
+2.775 0.9275
+2.775 0.81
+};
+\addplot [black]
+table {%
+3 0.81
+3 0.73
+};
+\addplot [black]
+table {%
+3 0.9275
+3 0.99
+};
+\addplot [black]
+table {%
+2.8875 0.73
+3.1125 0.73
+};
+\addplot [black]
+table {%
+2.8875 0.99
+3.1125 0.99
+};
+\addplot [black]
+table {%
+3.775 0.81
+4.225 0.81
+4.225 0.9275
+3.775 0.9275
+3.775 0.81
+};
+\addplot [black]
+table {%
+4 0.81
+4 0.73
+};
+\addplot [black]
+table {%
+4 0.9275
+4 0.99
+};
+\addplot [black]
+table {%
+3.8875 0.73
+4.1125 0.73
+};
+\addplot [black]
+table {%
+3.8875 0.99
+4.1125 0.99
+};
+\addplot [steelblue70100170]
+table {%
+0.775 0.885
+1.225 0.885
+};
+\addplot [steelblue70100170]
+table {%
+1.775 0.89
+2.225 0.89
+};
+\addplot [steelblue70100170]
+table {%
+2.775 0.885
+3.225 0.885
+};
+\addplot [steelblue70100170]
+table {%
+3.775 0.885
+4.225 0.885
+};
+\end{groupplot}
+
+\draw ({$(current bounding box.south west)!0.5!(current bounding box.south east)$}|-{$(current bounding box.south west)!0.98!(current bounding box.north west)$}) node[
+  scale=0.6,
+  anchor=north,
+  text=black,
+  rotate=0.0
+]{Component Memory Distribution by Workflow};
+\end{tikzpicture}

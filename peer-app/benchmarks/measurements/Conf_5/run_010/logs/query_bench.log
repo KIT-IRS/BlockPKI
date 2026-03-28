@@ -1,0 +1,4 @@
+$ /usr/bin/python3 /opt/fabric/benchmarks/benchmark_queries.py --api http://127.0.0.1:8083 --cert-id csr-irs3-1772993796 --iters 30 --warmup 5 --timeout 10.0 --outdir /opt/fabric/benchmarks/out/suite_20260308_175102/run_010/query --run-id run_010 --require-status-success --require-proof-success
+
+Wrote: /opt/fabric/benchmarks/out/suite_20260308_175102/run_010/query/query_bench_iterations.csv
+Wrote: /opt/fabric/benchmarks/out/suite_20260308_175102/run_010/query/query_bench_summary.csv

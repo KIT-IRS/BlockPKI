@@ -1,0 +1,320 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{groupplot}[group style={group size=2 by 1}]
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={orderer volume},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Delta Bytes},
+ymajorgrids,
+ymin=0, ymax=173730.75,
+ytick style={color=darkslategray51},
+ytick={0,20000,40000,60000,80000,100000,120000,140000,160000,180000},
+yticklabels={0 B,20.0 KB,40.0 KB,60.0 KB,80.0 KB,100.0 KB,120.0 KB,140.0 KB,160.0 KB,180.0 KB}
+]
+\addplot [black]
+table {%
+0.775 83770
+1.225 83770
+1.225 89620.75
+0.775 89620.75
+0.775 83770
+};
+\addplot [black]
+table {%
+1 83770
+1 81817
+};
+\addplot [black]
+table {%
+1 89620.75
+1 89633
+};
+\addplot [black]
+table {%
+0.8875 81817
+1.1125 81817
+};
+\addplot [black]
+table {%
+0.8875 89633
+1.1125 89633
+};
+\addplot [black]
+table {%
+1.775 139777.5
+2.225 139777.5
+2.225 155761
+1.775 155761
+1.775 139777.5
+};
+\addplot [black]
+table {%
+2 139777.5
+2 136368
+};
+\addplot [black]
+table {%
+2 155761
+2 167491
+};
+\addplot [black]
+table {%
+1.8875 136368
+2.1125 136368
+};
+\addplot [black]
+table {%
+1.8875 167491
+2.1125 167491
+};
+\addplot [black]
+table {%
+2.775 92902.5
+3.225 92902.5
+3.225 99576.5
+2.775 99576.5
+2.775 92902.5
+};
+\addplot [black]
+table {%
+3 92902.5
+3 84037
+};
+\addplot [black]
+table {%
+3 99576.5
+3 102705
+};
+\addplot [black]
+table {%
+2.8875 84037
+3.1125 84037
+};
+\addplot [black]
+table {%
+2.8875 102705
+3.1125 102705
+};
+\addplot [black]
+table {%
+3.775 42737
+4.225 42737
+4.225 49453.25
+3.775 49453.25
+3.775 42737
+};
+\addplot [black]
+table {%
+4 42737
+4 42696
+};
+\addplot [black]
+table {%
+4 49453.25
+4 49456
+};
+\addplot [black]
+table {%
+3.8875 42696
+4.1125 42696
+};
+\addplot [black]
+table {%
+3.8875 49456
+4.1125 49456
+};
+\addplot [steelblue70100170]
+table {%
+0.775 89579
+1.225 89579
+};
+\addplot [steelblue70100170]
+table {%
+1.775 147216
+2.225 147216
+};
+\addplot [steelblue70100170]
+table {%
+2.775 93637.5
+3.225 93637.5
+};
+\addplot [steelblue70100170]
+table {%
+3.775 49445.5
+4.225 49445.5
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={peer volume},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=0, ymax=205534.55,
+ytick style={color=darkslategray51},
+ytick={0,25000,50000,75000,100000,125000,150000,175000,200000,225000},
+yticklabels={0 B,25.0 KB,50.0 KB,75.0 KB,100.0 KB,125.0 KB,150.0 KB,175.0 KB,200.0 KB,225.0 KB}
+]
+\addplot [black]
+table {%
+0.775 104196.75
+1.225 104196.75
+1.225 110106.5
+0.775 110106.5
+0.775 104196.75
+};
+\addplot [black]
+table {%
+1 104196.75
+1 102160
+};
+\addplot [black]
+table {%
+1 110106.5
+1 110177
+};
+\addplot [black]
+table {%
+0.8875 102160
+1.1125 102160
+};
+\addplot [black]
+table {%
+0.8875 110177
+1.1125 110177
+};
+\addplot [black]
+table {%
+1.775 167226.25
+2.225 167226.25
+2.225 183563.5
+1.775 183563.5
+1.775 167226.25
+};
+\addplot [black]
+table {%
+2 167226.25
+2 164044
+};
+\addplot [black]
+table {%
+2 183563.5
+2 198199
+};
+\addplot [black]
+table {%
+1.8875 164044
+2.1125 164044
+};
+\addplot [black]
+table {%
+1.8875 198199
+2.1125 198199
+};
+\addplot [black]
+table {%
+2.775 110663.75
+3.225 110663.75
+3.225 117429.75
+2.775 117429.75
+2.775 110663.75
+};
+\addplot [black]
+table {%
+3 110663.75
+3 101605
+};
+\addplot [black]
+table {%
+3 117429.75
+3 120647
+};
+\addplot [black]
+table {%
+2.8875 101605
+3.1125 101605
+};
+\addplot [black]
+table {%
+2.8875 120647
+3.1125 120647
+};
+\addplot [black]
+table {%
+3.775 51543.25
+4.225 51543.25
+4.225 58419
+3.775 58419
+3.775 51543.25
+};
+\addplot [black]
+table {%
+4 51543.25
+4 51488
+};
+\addplot [black]
+table {%
+4 58419
+4 58433
+};
+\addplot [black]
+table {%
+3.8875 51488
+4.1125 51488
+};
+\addplot [black]
+table {%
+3.8875 58433
+4.1125 58433
+};
+\addplot [steelblue70100170]
+table {%
+0.775 110041.5
+1.225 110041.5
+};
+\addplot [steelblue70100170]
+table {%
+1.775 174848.5
+2.225 174848.5
+};
+\addplot [steelblue70100170]
+table {%
+2.775 111351.5
+3.225 111351.5
+};
+\addplot [steelblue70100170]
+table {%
+3.775 58390
+4.225 58390
+};
+\end{groupplot}
+
+\draw ({$(current bounding box.south west)!0.5!(current bounding box.south east)$}|-{$(current bounding box.south west)!0.98!(current bounding box.north west)$}) node[
+  scale=0.6,
+  anchor=north,
+  text=black,
+  rotate=0.0
+]{Storage Delta Distribution by Workflow and Component (/var/lib/docker/volumes Only)};
+\end{tikzpicture}

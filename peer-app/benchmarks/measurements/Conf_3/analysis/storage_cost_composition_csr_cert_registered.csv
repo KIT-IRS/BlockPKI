@@ -1,0 +1,6 @@
+component_type,category,bytes_mean,bytes_sum,rows
+physical,total,88077.2,3523088.0,40
+logical,active_index,38.0,380.0,10
+logical,certificate,3554.2,35542.0,10
+logical,merkle_state,751.6,7516.0,10
+logical,proposal,4508.0,45080.0,10

@@ -1,0 +1,46 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={fill opacity=0.8, draw opacity=1, text opacity=1, draw=lightgray204},
+tick align=outside,
+tick pos=left,
+title={Network Bytes (RX/TX) by Workflow (control-adjusted)},
+x grid style={lightgray204},
+xmin=-0.535, xmax=3.535,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Bytes per operation (avg)},
+ymajorgrids,
+ymin=0, ymax=177730067.55,
+ytick style={color=darkslategray51},
+ytick={0,20000000,40000000,60000000,80000000,100000000,120000000,140000000,160000000,180000000},
+yticklabels={0 B,20.0 MB,40.0 MB,60.0 MB,80.0 MB,100.0 MB,120.0 MB,140.0 MB,160.0 MB,180.0 MB}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.35,0) rectangle (axis cs:0,15327612.1);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{rx}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.65,0) rectangle (axis cs:1,47262893.8);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.65,0) rectangle (axis cs:2,41663370.5);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.65,0) rectangle (axis cs:3,2653124.8);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.77555756156289e-17,0) rectangle (axis cs:0.35,43550954.4);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{tx}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:1,0) rectangle (axis cs:1.35,169266731);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2,0) rectangle (axis cs:2.35,153753600.9);
+\draw[draw=none,fill=steelblue70100170] (axis cs:3,0) rectangle (axis cs:3.35,13097941.3);
+\end{axis}
+
+\end{tikzpicture}

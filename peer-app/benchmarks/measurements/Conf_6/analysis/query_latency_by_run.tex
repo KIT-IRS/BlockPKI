@@ -1,0 +1,103 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{dodgerblue35161224}{RGB}{35,161,224}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={fill opacity=0.8, draw opacity=1, text opacity=1, draw=lightgray204},
+tick align=outside,
+tick pos=left,
+title={Query Latency by Run},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Mean Latency (ms)},
+ymajorgrids,
+ymin=-2.88999700166667, ymax=61.1960279683333,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 49.6848858333333
+2 49.5214494333333
+3 52.4639767
+4 48.9781751666667
+5 49.90226
+6 49.4993194333333
+7 53.2379109
+8 48.0854585666667
+9 49.90029
+10 58.2830268333333
+};
+\addlegendentry{end to end ms}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 12.8364491333333
+2 13.0222232333333
+3 14.2517512
+4 12.9803258333333
+5 13.0893206
+6 13.9796123333333
+7 14.6456579666667
+8 12.9631018
+9 13.3336701333333
+10 15.2651201666667
+};
+\addlegendentry{merkle proof ms}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 23.1431486
+2 23.2239824333333
+3 24.5124699
+4 23.1387876666667
+5 23.2911829666667
+6 21.9580829333333
+7 24.5035473666667
+8 22.5289218333333
+9 22.9926901666667
+10 26.9233805
+};
+\addlegendentry{merkle root ms}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.0248894
+2 0.0245667666666667
+3 0.0233603
+4 0.0247067666666667
+5 0.0234766666666667
+6 0.0231819
+7 0.0231812666666667
+8 0.0325563666666667
+9 0.0237685666666667
+10 0.0230041333333333
+};
+\addlegendentry{proof verify ms}
+\addplot [semithick, dodgerblue35161224, mark=*, mark size=3, mark options={solid}]
+table {%
+1 13.4517118333333
+2 13.0271831
+3 13.4495564
+4 12.5960313
+5 13.2711578333333
+6 13.3191430666667
+7 13.8367888
+8 12.3326415666667
+9 13.3279880333333
+10 15.8487043
+};
+\addlegendentry{status ms}
+\end{axis}
+
+\end{tikzpicture}

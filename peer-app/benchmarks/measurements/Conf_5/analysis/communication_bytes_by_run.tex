@@ -1,0 +1,97 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.91,0.5)},
+  anchor=east,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Network Bytes by Run (control-adjusted)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Total RX+TX bytes per operation},
+ymajorgrids,
+ymin=0, ymax=68142532.95,
+ytick style={color=darkslategray51},
+ytick={0,10000000,20000000,30000000,40000000,50000000,60000000,70000000},
+yticklabels={0 B,10.0 MB,20.0 MB,30.0 MB,40.0 MB,50.0 MB,60.0 MB,70.0 MB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 19831520
+2 18891063
+3 21248396
+4 19679335
+5 20797709
+6 18402417
+7 19256634
+8 20038645
+9 19353086
+10 19520211
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 55949462
+2 60422902
+3 55648850
+4 57969124
+5 54442973
+6 65082739
+7 59860452
+8 57606231
+9 59756103
+10 57465914
+};
+\addlegendentry{join}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 51159996
+2 54090325
+3 48308546
+4 47424378
+5 52902704
+6 49634757
+7 48823847
+8 45102691
+9 44616341
+10 48498336
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 5517602
+2 4283963
+3 4219993
+4 4785822
+5 3886860
+6 4421116
+7 4219877
+8 4327776
+9 4452774
+10 4733420
+};
+\addlegendentry{revocation}
+\end{axis}
+
+\end{tikzpicture}

@@ -1,0 +1,75 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.03,0.97)},
+  anchor=north west,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Workflow Latency Split (Blockchain vs TSS Coordination)},
+x grid style={lightgray204},
+xmin=-0.59, xmax=3.59,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3},
+xticklabels={csr,revocation,removal,join},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Mean Seconds},
+ymajorgrids,
+ymin=0, ymax=224.48327979,
+ytick style={color=darkslategray51}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.4,0) rectangle (axis cs:0.4,20.2727866);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{blockchain}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.6,0) rectangle (axis cs:1.4,19.1090795);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.6,0) rectangle (axis cs:2.4,18.2432643);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.6,0) rectangle (axis cs:3.4,18.7045054);
+\draw[draw=none,fill=steelblue70100170] (axis cs:-0.4,20.2727866) rectangle (axis cs:0.4,71.7811233);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{tss_coordination}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:0.6,19.1090795) rectangle (axis cs:1.4,19.1090795);
+\draw[draw=none,fill=steelblue70100170] (axis cs:1.6,18.2432643) rectangle (axis cs:2.4,196.5815362);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.6,18.7045054) rectangle (axis cs:3.4,213.7935998);
+\draw (axis cs:0,71.8811233) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{71.78s};
+\draw (axis cs:1,19.2090795) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{19.11s};
+\draw (axis cs:2,196.6815362) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{196.58s};
+\draw (axis cs:3,213.8935998) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{213.79s};
+\end{axis}
+
+\end{tikzpicture}

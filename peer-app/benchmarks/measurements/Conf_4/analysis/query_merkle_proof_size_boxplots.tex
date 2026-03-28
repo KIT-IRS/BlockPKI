@@ -1,0 +1,128 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Merkle Payload/Proof Size Distribution},
+x grid style={lightgray204},
+xmin=0.5, xmax=3.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3},
+xticklabels={merkle_proof_payload_bytes,merkle_proof_only_bytes,merkle_root_payload_bytes},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Bytes},
+ymajorgrids,
+ymin=0, ymax=1698.35,
+ytick style={color=darkslategray51},
+ytick={0,200,400,600,800,1000,1200,1400,1600,1800},
+yticklabels={0 B,200 B,400 B,600 B,800 B,1.0 KB,1.2 KB,1.4 KB,1.6 KB,1.8 KB}
+]
+\addplot [black]
+table {%
+0.85 673
+1.15 673
+1.15 673
+0.85 673
+0.85 673
+};
+\addplot [black]
+table {%
+1 673
+1 673
+};
+\addplot [black]
+table {%
+1 673
+1 673
+};
+\addplot [black]
+table {%
+0.925 673
+1.075 673
+};
+\addplot [black]
+table {%
+0.925 673
+1.075 673
+};
+\addplot [black]
+table {%
+1.85 473
+2.15 473
+2.15 473
+1.85 473
+1.85 473
+};
+\addplot [black]
+table {%
+2 473
+2 473
+};
+\addplot [black]
+table {%
+2 473
+2 473
+};
+\addplot [black]
+table {%
+1.925 473
+2.075 473
+};
+\addplot [black]
+table {%
+1.925 473
+2.075 473
+};
+\addplot [black]
+table {%
+2.85 1640
+3.15 1640
+3.15 1640
+2.85 1640
+2.85 1640
+};
+\addplot [black]
+table {%
+3 1640
+3 1640
+};
+\addplot [black]
+table {%
+3 1640
+3 1640
+};
+\addplot [black]
+table {%
+2.925 1640
+3.075 1640
+};
+\addplot [black]
+table {%
+2.925 1640
+3.075 1640
+};
+\addplot [steelblue70100170]
+table {%
+0.85 673
+1.15 673
+};
+\addplot [steelblue70100170]
+table {%
+1.85 473
+2.15 473
+};
+\addplot [steelblue70100170]
+table {%
+2.85 1640
+3.15 1640
+};
+\end{axis}
+
+\end{tikzpicture}

@@ -1,0 +1,13 @@
+workflow_base,tss_cpu_avg_count,tss_cpu_avg_mean,tss_cpu_avg_min,tss_cpu_avg_max,tss_cpu_avg_median,tss_mem_avg_count,tss_mem_avg_mean,tss_mem_avg_min,tss_mem_avg_max,tss_mem_avg_median,component,peer_cpu_avg_count,peer_cpu_avg_mean,peer_cpu_avg_min,peer_cpu_avg_max,peer_cpu_avg_median,peer_mem_avg_count,peer_mem_avg_mean,peer_mem_avg_min,peer_mem_avg_max,peer_mem_avg_median,orderer_cpu_avg_count,orderer_cpu_avg_mean,orderer_cpu_avg_min,orderer_cpu_avg_max,orderer_cpu_avg_median,orderer_mem_avg_count,orderer_mem_avg_mean,orderer_mem_avg_min,orderer_mem_avg_max,orderer_mem_avg_median
+csr,10.0,8.254999999999999,7.91,9.06,8.115,10.0,0.303,0.29,0.31,0.3,tss,,,,,,,,,,,,,,,,,,,,
+join,10.0,14.904,13.51,16.22,15.25,10.0,0.31,0.3,0.32,0.31,tss,,,,,,,,,,,,,,,,,,,,
+removal,10.0,0.21600000000000003,0.2,0.24,0.215,10.0,0.301,0.29,0.31,0.3,tss,,,,,,,,,,,,,,,,,,,,
+revocation,10.0,0.44400000000000006,0.32,0.55,0.45,10.0,0.3,0.29,0.31,0.3,tss,,,,,,,,,,,,,,,,,,,,
+csr,,,,,,,,,,,peer,10.0,2.902,2.71,3.04,2.92,10.0,2.0149999999999997,1.94,2.09,1.9949999999999999,,,,,,,,,,
+join,,,,,,,,,,,peer,10.0,2.293,2.21,2.39,2.3049999999999997,10.0,2.0309999999999997,1.96,2.1,2.035,,,,,,,,,,
+removal,,,,,,,,,,,peer,10.0,2.167,2.07,2.34,2.13,10.0,2.023,1.95,2.1,2.01,,,,,,,,,,
+revocation,,,,,,,,,,,peer,10.0,2.9699999999999998,2.65,3.23,2.97,10.0,2.018,1.95,2.09,1.9949999999999999,,,,,,,,,,
+csr,,,,,,,,,,,orderer,,,,,,,,,,,10.0,0.313,0.27,0.36,0.31,10.0,0.596,0.52,0.64,0.6
+join,,,,,,,,,,,orderer,,,,,,,,,,,10.0,0.255,0.23,0.3,0.255,10.0,0.605,0.55,0.64,0.605
+removal,,,,,,,,,,,orderer,,,,,,,,,,,10.0,0.23700000000000002,0.22,0.26,0.23,10.0,0.602,0.53,0.64,0.605
+revocation,,,,,,,,,,,orderer,,,,,,,,,,,10.0,0.357,0.32,0.43,0.35,10.0,0.596,0.52,0.64,0.6

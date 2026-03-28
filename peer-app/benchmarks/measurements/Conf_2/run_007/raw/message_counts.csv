@@ -1,0 +1,5 @@
+ts_start,ts_end,workflow,proposal_id,tss_p2p_sent,tss_p2p_recv,tss_p2p_sent_broadcast,tss_p2p_sent_direct,tss_p2p_recv_broadcast,tss_p2p_recv_direct,tss_p2p_sent_by_type,tss_p2p_recv_by_type,gossip_metric_total
+2026-03-09T07:31:43.532867Z,2026-03-09T07:32:08.371829Z,csr,csr-irs3-1773041503,40,40,32,8,32,8,"{""signing"": 40}","{""signing"": 40}",NA
+2026-03-09T07:32:29.375904Z,2026-03-09T07:32:39.942967Z,revocation,revoke-irs3-1773041549,0,0,0,0,0,0,{},{},NA
+2026-03-09T07:32:58.882786Z,2026-03-09T07:33:47.995892Z,removal,remove-irs3-member1-1773041578,0,0,0,0,0,0,{},{},NA
+2026-03-09T07:34:06.876063Z,2026-03-09T07:35:02.033248Z,join,join-irs3-1773041646,16,20,16,0,16,4,"{""reshare"": 16}","{""reshare"": 20}",NA

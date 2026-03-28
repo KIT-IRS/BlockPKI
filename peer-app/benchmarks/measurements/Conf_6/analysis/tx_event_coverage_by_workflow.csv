@@ -1,0 +1,6 @@
+workflow_base,total_ops,ops_with_events,event_coverage_ratio
+csr,10,10,1.0
+join,10,10,1.0
+removal,10,10,1.0
+reshare,0,2,0.0
+revocation,10,10,1.0

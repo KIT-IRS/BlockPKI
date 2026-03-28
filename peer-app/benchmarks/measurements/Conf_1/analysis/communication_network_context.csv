@@ -1,0 +1,2 @@
+resources_iface,no_resources_control_subtract,resources_control_exclude_port,peer_metrics_url_count,peer_metrics_prefix,collect_messages
+eth0,False,22;8083;9446,1,gossip_,True

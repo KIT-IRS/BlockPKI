@@ -1,0 +1,5 @@
+workflow_base,governance_residual_bytes,voting_residual_bytes,reshare_residual_bytes,operation_end_residual_bytes
+csr,12200.44,3266.1366666400004,0.0,0.0
+revocation,4339.3,3395.59583335,0.0,0.0
+removal,2505.15,2138.5583333500003,9957.45,0.0
+join,1580.7333333333333,1607.925,7643.916666666667,13868.066666666668

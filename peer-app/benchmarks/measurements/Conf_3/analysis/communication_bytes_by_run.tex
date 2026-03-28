@@ -1,0 +1,97 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.09,0.5)},
+  anchor=west,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Network Bytes by Run (control-adjusted)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Total RX+TX bytes per operation},
+ymajorgrids,
+ymin=0, ymax=1911222.65,
+ytick style={color=darkslategray51},
+ytick={0,250000,500000,750000,1000000,1250000,1500000,1750000,2000000},
+yticklabels={0 B,250.0 KB,500.0 KB,750.0 KB,1.0 MB,1.2 MB,1.5 MB,1.8 MB,2.0 MB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 742204
+2 752549
+3 707167
+4 776623
+5 749005
+6 759026
+7 738639
+8 769814
+9 751733
+10 781943
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 1737337
+2 1727758
+3 1780450
+4 1704345
+5 1676750
+6 1704648
+7 1696259
+8 1709319
+9 1728791
+10 1828657
+};
+\addlegendentry{join}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 522300
+2 519138
+3 503829
+4 520804
+5 474755
+6 529173
+7 564014
+8 475127
+9 474376
+10 482351
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 191997
+2 184883
+3 224271
+4 177344
+5 179808
+6 195464
+7 228697
+8 193482
+9 177642
+10 184144
+};
+\addlegendentry{revocation}
+\end{axis}
+
+\end{tikzpicture}

@@ -1,0 +1,69 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{dodgerblue35161224}{RGB}{35,161,224}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={csr: Peer Volume Composition by Action},
+x grid style={lightgray204},
+xmin=-0.59, xmax=3.59,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3},
+xticklabel style={rotate=28.0,anchor=east},
+xticklabels={csr_submitted,csr_voted,csr_approved,certificate_registered},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Bytes (mean per operation)},
+ymajorgrids,
+ymin=0, ymax=149062.62,
+ytick style={color=darkslategray51},
+ytick={0,20000,40000,60000,80000,100000,120000,140000,160000},
+yticklabels={0 B,20.0 KB,40.0 KB,60.0 KB,80.0 KB,100.0 KB,120.0 KB,140.0 KB,160.0 KB}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.4,0) rectangle (axis cs:0.4,8481.7);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{block_accounted(state+tx+block_overhead)}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.6,0) rectangle (axis cs:1.4,16252.7066667);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.6,0) rectangle (axis cs:2.4,0);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.6,0) rectangle (axis cs:3.4,13366.05);
+\draw[draw=none,fill=steelblue70100170] (axis cs:-0.4,8481.7) rectangle (axis cs:0.4,8481.7);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{block_files_additional}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:0.6,16252.7066667) rectangle (axis cs:1.4,33786.6);
+\draw[draw=none,fill=steelblue70100170] (axis cs:1.6,0) rectangle (axis cs:2.4,54026.4);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.6,13366.05) rectangle (axis cs:3.4,121985.6);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:-0.4,8481.7) rectangle (axis cs:0.4,8784.4);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkgoldenrod16713046}
+\addlegendentry{block_index}
+
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:0.6,33786.6) rectangle (axis cs:1.4,34522.5);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:1.6,54026.4) rectangle (axis cs:2.4,55211.5);
+\draw[draw=none,fill=darkgoldenrod16713046] (axis cs:2.6,121985.6) rectangle (axis cs:3.4,124991.3);
+\draw[draw=none,fill=darkmagenta16316124] (axis cs:-0.4,8784.4) rectangle (axis cs:0.4,10681.9);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkmagenta16316124}
+\addlegendentry{leveldb}
+
+\draw[draw=none,fill=darkmagenta16316124] (axis cs:0.6,34522.5) rectangle (axis cs:1.4,37647.5);
+\draw[draw=none,fill=darkmagenta16316124] (axis cs:1.6,55211.5) rectangle (axis cs:2.4,61424.7);
+\draw[draw=none,fill=darkmagenta16316124] (axis cs:2.6,124991.3) rectangle (axis cs:3.4,141789.4);
+\draw[draw=none,fill=dodgerblue35161224] (axis cs:-0.4,10681.9) rectangle (axis cs:0.4,10716.9);
+\addlegendimage{ybar,ybar legend,draw=none,fill=dodgerblue35161224}
+\addlegendentry{other}
+
+\draw[draw=none,fill=dodgerblue35161224] (axis cs:0.6,37647.5) rectangle (axis cs:1.4,37686);
+\draw[draw=none,fill=dodgerblue35161224] (axis cs:1.6,61424.7) rectangle (axis cs:2.4,61491.2);
+\draw[draw=none,fill=dodgerblue35161224] (axis cs:2.6,141789.4) rectangle (axis cs:3.4,141964.4);
+\end{axis}
+
+\end{tikzpicture}

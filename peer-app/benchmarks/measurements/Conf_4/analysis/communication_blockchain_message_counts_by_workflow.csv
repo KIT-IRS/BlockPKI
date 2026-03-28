@@ -1,0 +1,5 @@
+workflow_base,tx_submit_started,tx_submitted,tx_committed,tx_failed,cc_event_observed,unique_runs,unique_operations,committed_tx_count,committed_vote_tx_count,committed_vote_tx_ratio,excluded_storage_attribution_rows,blockchain_signal_rows_total,tx_submit_started_avg_per_run,tx_submit_started_avg_per_operation,tx_submitted_avg_per_run,tx_submitted_avg_per_operation,tx_committed_avg_per_run,tx_committed_avg_per_operation,tx_failed_avg_per_run,tx_failed_avg_per_operation,cc_event_observed_avg_per_run,cc_event_observed_avg_per_operation,blockchain_signal_rows_total_avg_per_run,blockchain_signal_rows_total_avg_per_operation
+csr,63,56,26,37,80,10,10,26,10,0.38461538461538464,40,262,6.3,6.3,5.6,5.6,2.6,2.6,3.7,3.7,8.0,8.0,26.2,26.2
+join,10,10,10,0,30,10,10,10,0,0.0,30,60,1.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,3.0,3.0,6.0,6.0
+removal,26,24,18,8,40,10,10,18,8,0.4444444444444444,40,116,2.6,2.6,2.4,2.4,1.8,1.8,0.8,0.8,4.0,4.0,11.6,11.6
+revocation,36,33,17,19,40,10,10,17,7,0.4117647058823529,40,145,3.6,3.6,3.3,3.3,1.7,1.7,1.9,1.9,4.0,4.0,14.5,14.5

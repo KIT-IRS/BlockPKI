@@ -1,0 +1,233 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Serialized TX/Block Overhead Ratio Distribution (csr)},
+x grid style={lightgray204},
+xmin=0.5, xmax=6.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4,5,6},
+xticklabel style={rotate=35.0},
+xticklabels={
+  csr_submitted|tx/logical,
+  csr_submitted|tx+block/logical,
+  csr_voted|tx/logical,
+  csr_voted|tx+block/logical,
+  certificate_registered|tx/logical,
+  certificate_registered|tx+block/logical
+},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Ratio},
+ymajorgrids,
+ymin=0, ymax=2.55697454014003,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.75 2.189725627554
+1.25 2.189725627554
+1.25 2.1918690167467
+0.75 2.1918690167467
+0.75 2.189725627554
+};
+\addplot [black]
+table {%
+1 2.189725627554
+1 2.18943374197315
+};
+\addplot [black]
+table {%
+1 2.1918690167467
+1 2.19280280866004
+};
+\addplot [black]
+table {%
+0.875 2.18943374197315
+1.125 2.18943374197315
+};
+\addplot [black]
+table {%
+0.875 2.19280280866004
+1.125 2.19280280866004
+};
+\addplot [black]
+table {%
+1.75 2.47285464098074
+2.25 2.47285464098074
+2.25 2.47544576979097
+1.75 2.47544576979097
+1.75 2.47285464098074
+};
+\addplot [black]
+table {%
+2 2.47285464098074
+2 2.47285464098074
+};
+\addplot [black]
+table {%
+2 2.47544576979097
+2 2.47688706846109
+};
+\addplot [black]
+table {%
+1.875 2.47285464098074
+2.125 2.47285464098074
+};
+\addplot [black]
+table {%
+1.875 2.47688706846109
+2.125 2.47688706846109
+};
+\addplot [black]
+table {%
+2.75 0.875137634882185
+3.25 0.875137634882185
+3.25 0.876233538485759
+2.75 0.876233538485759
+2.75 0.875137634882185
+};
+\addplot [black]
+table {%
+3 0.875137634882185
+3 0.875137634882185
+};
+\addplot [black]
+table {%
+3 0.876233538485759
+3 0.877458563535912
+};
+\addplot [black]
+table {%
+2.875 0.875137634882185
+3.125 0.875137634882185
+};
+\addplot [black]
+table {%
+2.875 0.877458563535912
+3.125 0.877458563535912
+};
+\addplot [black]
+table {%
+3.75 0.902972853640335
+4.25 0.902972853640335
+4.25 0.911917523556307
+3.75 0.911917523556307
+3.75 0.902972853640335
+};
+\addplot [black]
+table {%
+4 0.902972853640335
+4 0.902196652719665
+};
+\addplot [black]
+table {%
+4 0.911917523556307
+4 0.913554327845304
+};
+\addplot [black]
+table {%
+3.875 0.902196652719665
+4.125 0.902196652719665
+};
+\addplot [black]
+table {%
+3.875 0.913554327845304
+4.125 0.913554327845304
+};
+\addplot [black]
+table {%
+4.75 1.20641338487457
+5.25 1.20641338487457
+5.25 1.20699830823408
+4.75 1.20699830823408
+4.75 1.20641338487457
+};
+\addplot [black]
+table {%
+5 1.20641338487457
+5 1.20581655480984
+};
+\addplot [black]
+table {%
+5 1.20699830823408
+5 1.20770485120261
+};
+\addplot [black]
+table {%
+4.875 1.20581655480984
+5.125 1.20581655480984
+};
+\addplot [black]
+table {%
+4.875 1.20770485120261
+5.125 1.20770485120261
+};
+\addplot [black]
+table {%
+5.75 1.25605105276584
+6.25 1.25605105276584
+6.25 1.25729687290786
+5.75 1.25729687290786
+5.75 1.25605105276584
+};
+\addplot [black]
+table {%
+6 1.25605105276584
+6 1.25528777709986
+};
+\addplot [black]
+table {%
+6 1.25729687290786
+6 1.25738891153689
+};
+\addplot [black]
+table {%
+5.875 1.25528777709986
+6.125 1.25528777709986
+};
+\addplot [black]
+table {%
+5.875 1.25738891153689
+6.125 1.25738891153689
+};
+\addplot [steelblue70100170]
+table {%
+0.75 2.18987157034443
+1.25 2.18987157034443
+};
+\addplot [steelblue70100170]
+table {%
+1.75 2.47329246935201
+2.25 2.47329246935201
+};
+\addplot [steelblue70100170]
+table {%
+2.75 0.875909191802142
+3.25 0.875909191802142
+};
+\addplot [steelblue70100170]
+table {%
+3.75 0.907424250706865
+4.25 0.907424250706865
+};
+\addplot [steelblue70100170]
+table {%
+4.75 1.2065493762485
+5.25 1.2065493762485
+};
+\addplot [steelblue70100170]
+table {%
+5.75 1.25620171860405
+6.25 1.25620171860405
+};
+\end{axis}
+
+\end{tikzpicture}

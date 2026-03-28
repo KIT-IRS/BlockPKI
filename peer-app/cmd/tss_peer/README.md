@@ -2,7 +2,7 @@
 
 ## Overview
 
-The TSS Peer is a fully autonomous node that participates in a Decentralized PKI system using Threshold Signature Scheme (TSS) on Hyperledger Fabric.
+The TSS Node participates in a Decentralized PKI system using Threshold Signatures on Hyperledger Fabric.
 
 ## Features
 
@@ -14,17 +14,20 @@ The TSS Peer is a fully autonomous node that participates in a Decentralized PKI
 - **Certificate Registration**: Registers combined certificates after signing
 
 ### Manual Operations (Interactive Menu)
+<<<<<<< Updated upstream
 - **Peer Joining**: Bootstrap or sponsor-based CA membership
 - **CSR Submission**: Submit certificate signing requests
 - **Member Sponsoring**: Sponsor new members to join the CA
+=======
+- **Peer Joining**: Bootstrap or join-request-based CA membership
+- **CSR Submission**: Submit certificate signing requests
+>>>>>>> Stashed changes
 - **Status Viewing**: View CA state, DKG sessions, key share info
 
-## Quick Start
 
-### Prerequisites
-1. Fabric test-network running with `bpki` chaincode deployed
-2. Go 1.19+ installed
+## Interactive Menu Options
 
+<<<<<<< Updated upstream
 ### Running a Peer
 
 **Option 1: PowerShell Script**
@@ -32,8 +35,22 @@ The TSS Peer is a fully autonomous node that participates in a Decentralized PKI
 cd peer-app/scripts
 .\run_tss_peer.ps1 -org org1  # In Terminal 1
 .\run_tss_peer.ps1 -org org2  # In Terminal 2
+=======
+>>>>>>> Stashed changes
 ```
+========== TSS Peer Menu ==========
+1. View CA State
+2. Submit CSR (Certificate Request)
+3. List Issued Certificates
+4. Propose Certificate Revocation
+5. View Certificate Merkle Tree
+6. View My Key Share Info
+7. Show My Member ID
+8. Advanced Options >>>
+9. Start Web UI / Stop Web UI
+0. Exit
 
+<<<<<<< Updated upstream
 **Option 2: Direct Go Run**
 ```powershell
 cd peer-app/cmd/tss_peer
@@ -66,13 +83,27 @@ cd peer-app/scripts
 0.  Exit
 ```
 
+=======
+Advanced Options include:
+- Read-only diagnostics (DKG/session/revocation views)
+- Join request submission + member removal proposal
+- Force reshare / fresh DKG
+```
+
+>>>>>>> Stashed changes
 ## Workflow Sequence
 
 ### Initial Setup (Automatic)
 1. Peer connects to Fabric via Gateway API
+<<<<<<< Updated upstream
 2. Pre-generates TSS safe primes (~30 seconds)
 3. Registers P2P address on blockchain
 4. Joins CA via bootstrap (if within bootstrap period)
+=======
+2. Loads persisted TSS pre-params if available
+3. Registers P2P address on blockchain
+4. Joins CA via bootstrap (if within bootstrap period and join_mode=member)
+>>>>>>> Stashed changes
 
 ### DKG Process (Automatic)
 1. Polling loop detects "initiated" DKG session → Acknowledges
@@ -80,13 +111,14 @@ cd peer-app/scripts
 3. Executes TSS keygen with P2P message exchange
 4. org1 submits completion with CA public key
 
-### Certificate Issuance (Automatic after manual CSR)
-1. User submits CSR (menu option 9)
-2. Other peers auto-vote (polling every 5 seconds)
+### Certificate Issuance (Automatic after CSR)
+1. User submits CSR 
+2. Other peers auto-vote (polling)
 3. When approved → Signing session created
 4. Peers execute TSS signing protocol
 5. Certificate registered on blockchain
 
+<<<<<<< Updated upstream
 ### Member Addition (Sponsor Model)
 1. Existing member sponsors new member (menu option 3)
 2. Other members endorse (menu option 4)
@@ -145,3 +177,10 @@ Polling Loop (5s interval):
 - **Curve**: secp256k1 (Bitcoin/Ethereum compatible)
 - **Threshold**: Configurable (default: n-1 for n parties)
 - **Pre-params**: Paillier keys with safe primes (generated once and persisted to disk, so no more "No pre-params")
+=======
+### Member Addition (Join Request Model)
+1. Candidate submits a join request
+2. Existing members vote on the request
+3. When approved → Member added
+4. Reshare session initiated → Peers generate new shares
+>>>>>>> Stashed changes

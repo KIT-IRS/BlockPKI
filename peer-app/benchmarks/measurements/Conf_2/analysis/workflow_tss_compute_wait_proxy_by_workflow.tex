@@ -1,0 +1,51 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.03,0.97)},
+  anchor=north west,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={TSS Compute vs Wait (Proxy) by Workflow},
+x grid style={lightgray204},
+xmin=-0.59, xmax=3.59,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3},
+xticklabels={csr,revocation,removal,join},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Seconds per operation (mean)},
+ymajorgrids,
+ymin=0, ymax=52.3730125558376,
+ytick style={color=darkslategray51}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.4,0) rectangle (axis cs:0.4,0);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{compute_proxy}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.6,0) rectangle (axis cs:1.4,0);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.6,0) rectangle (axis cs:2.4,0);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.6,0) rectangle (axis cs:3.4,0.0012205123901367);
+\draw[draw=none,fill=steelblue70100170] (axis cs:-0.4,0) rectangle (axis cs:0.4,0.00287559032440181);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{wait_proxy}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:0.6,0) rectangle (axis cs:1.4,0);
+\draw[draw=none,fill=steelblue70100170] (axis cs:1.6,0) rectangle (axis cs:2.4,39.3448046684265);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.6,0.0012205123901367) rectangle (axis cs:3.4,49.8790595769882);
+\end{axis}
+
+\end{tikzpicture}

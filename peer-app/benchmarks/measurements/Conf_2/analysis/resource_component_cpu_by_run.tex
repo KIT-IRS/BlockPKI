@@ -1,0 +1,225 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{groupplot}[group style={group size=3 by 1}]
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={tss},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Percent of host total CPU},
+ymajorgrids,
+ymin=-0.6785, ymax=18.2085,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 11.38
+2 11.36
+3 10.41
+4 11.3
+5 11.3
+6 11.18
+7 11.62
+8 10.32
+9 10.5
+10 10.61
+};
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 16.03
+2 15.94
+3 16.2
+4 17.34
+5 16.97
+6 17.35
+7 17.02
+8 15.91
+9 15.33
+10 15.64
+};
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.23
+2 0.19
+3 0.21
+4 0.18
+5 0.57
+6 0.19
+7 0.19
+8 0.21
+9 0.48
+10 0.26
+};
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.3
+2 0.33
+3 0.35
+4 0.33
+5 0.33
+6 0.33
+7 0.33
+8 0.35
+9 0.26
+10 0.35
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={peer},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=2.5985, ymax=3.9515,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 3.6
+2 3.51
+3 3.77
+4 3.89
+5 3.54
+6 3.53
+7 3.28
+8 3.35
+9 3.8
+10 3.65
+};
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 3.05
+2 2.99
+3 3.05
+4 3.04
+5 3.08
+6 2.98
+7 2.97
+8 3.09
+9 2.93
+10 3.04
+};
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 2.69
+2 2.66
+3 2.72
+4 2.79
+5 2.75
+6 2.76
+7 2.79
+8 2.68
+9 2.73
+10 2.66
+};
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 3.39
+2 3.54
+3 3.54
+4 3.42
+5 3.62
+6 3.35
+7 3.42
+8 3.42
+9 3.21
+10 3.66
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={orderer},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=0.3405, ymax=0.5495,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.47
+2 0.44
+3 0.5
+4 0.48
+5 0.46
+6 0.51
+7 0.43
+8 0.47
+9 0.46
+10 0.45
+};
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.4
+2 0.39
+3 0.4
+4 0.42
+5 0.41
+6 0.41
+7 0.41
+8 0.42
+9 0.35
+10 0.4
+};
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.38
+2 0.39
+3 0.39
+4 0.41
+5 0.4
+6 0.4
+7 0.4
+8 0.39
+9 0.39
+10 0.41
+};
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 0.54
+2 0.49
+3 0.44
+4 0.49
+5 0.46
+6 0.49
+7 0.51
+8 0.53
+9 0.44
+10 0.49
+};
+\end{groupplot}
+
+\draw ({$(current bounding box.south west)!0.5!(current bounding box.south east)$}|-{$(current bounding box.south west)!0.98!(current bounding box.north west)$}) node[
+  scale=0.6,
+  anchor=north,
+  text=black,
+  rotate=0.0
+]{Component CPU by Run};
+\end{tikzpicture}

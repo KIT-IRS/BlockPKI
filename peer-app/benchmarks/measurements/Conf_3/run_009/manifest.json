@@ -1,0 +1,304 @@
+{
+  "run_id": "run_009",
+  "started_at": "2026-03-08T08:03:11.227540Z",
+  "ended_at": "2026-03-08T08:05:53.238288Z",
+  "paths": {
+    "run_dir": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009",
+    "raw_dir": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw",
+    "labeled_dir": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/labeled",
+    "logs_dir": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs"
+  },
+  "workflows": [
+    {
+      "workflow": "csr",
+      "status": "success",
+      "return_code": 0,
+      "started_at": "2026-03-08T08:03:11.227592Z",
+      "ended_at": "2026-03-08T08:03:33.104997Z",
+      "log_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs/csr.log",
+      "command": "/usr/bin/python3 /opt/fabric/benchmarks/run_workflows.py --api http://127.0.0.1:8083 --workflow csr --outdir /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw --run-id run_009 --artifact-profile full --reason benchmark --timeout 600 --poll 2.0 --measure --collect-messages --phase-tags --peer-metrics-url http://localhost:9446/metrics --peer-metrics-prefix gossip_ --storage-path /var/lib/docker/volumes --storage-component 'peer=peer0\\.irs3\\.kit\\.edu' --storage-component 'orderer=orderer\\.kit\\.edu' --storage-slices --storage-topk 5 --proc-match 'orderer=(^|\\\\s)(/[^\\\\s]*/)?orderer(\\\\s|$)' --resources-interval 1.0 --resources-iface eth0 --resources-control-exclude-port 22 --resources-control-exclude-port 8083 --resources-control-exclude-port 9446 --gossip-convergence-timeout 30.0 --gossip-convergence-poll 1.0 --measurement-v2 --metrics /opt/fabric/state/irs3/metrics.jsonl"
+    },
+    {
+      "workflow": "revocation",
+      "status": "success",
+      "return_code": 0,
+      "started_at": "2026-03-08T08:03:50.054452Z",
+      "ended_at": "2026-03-08T08:04:01.671926Z",
+      "log_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs/revocation.log",
+      "command": "/usr/bin/python3 /opt/fabric/benchmarks/run_workflows.py --api http://127.0.0.1:8083 --workflow revocation --outdir /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw --run-id run_009 --artifact-profile full --reason benchmark --timeout 600 --poll 2.0 --measure --collect-messages --phase-tags --peer-metrics-url http://localhost:9446/metrics --peer-metrics-prefix gossip_ --storage-path /var/lib/docker/volumes --storage-component 'peer=peer0\\.irs3\\.kit\\.edu' --storage-component 'orderer=orderer\\.kit\\.edu' --storage-slices --storage-topk 5 --proc-match 'orderer=(^|\\\\s)(/[^\\\\s]*/)?orderer(\\\\s|$)' --resources-interval 1.0 --resources-iface eth0 --resources-control-exclude-port 22 --resources-control-exclude-port 8083 --resources-control-exclude-port 9446 --gossip-convergence-timeout 30.0 --gossip-convergence-poll 1.0 --measurement-v2 --metrics /opt/fabric/state/irs3/metrics.jsonl --member-id x509::CN=Member1@irs3.kit.edu,OU=member+OU=admin,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE::CN=ca.irs3.kit.edu,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE"
+    },
+    {
+      "workflow": "removal",
+      "status": "success",
+      "return_code": 0,
+      "started_at": "2026-03-08T08:04:16.673518Z",
+      "ended_at": "2026-03-08T08:04:50.621106Z",
+      "log_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs/removal.log",
+      "command": "/usr/bin/python3 /opt/fabric/benchmarks/run_workflows.py --api http://127.0.0.1:8083 --workflow removal --outdir /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw --run-id run_009 --artifact-profile full --reason benchmark --timeout 600 --poll 2.0 --measure --collect-messages --phase-tags --peer-metrics-url http://localhost:9446/metrics --peer-metrics-prefix gossip_ --storage-path /var/lib/docker/volumes --storage-component 'peer=peer0\\.irs3\\.kit\\.edu' --storage-component 'orderer=orderer\\.kit\\.edu' --storage-slices --storage-topk 5 --proc-match 'orderer=(^|\\\\s)(/[^\\\\s]*/)?orderer(\\\\s|$)' --resources-interval 1.0 --resources-iface eth0 --resources-control-exclude-port 22 --resources-control-exclude-port 8083 --resources-control-exclude-port 9446 --gossip-convergence-timeout 30.0 --gossip-convergence-poll 1.0 --measurement-v2 --metrics /opt/fabric/state/irs3/metrics.jsonl --member-id x509::CN=Member1@irs3.kit.edu,OU=member+OU=admin,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE::CN=ca.irs3.kit.edu,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE"
+    },
+    {
+      "workflow": "join",
+      "status": "success",
+      "return_code": 0,
+      "started_at": "2026-03-08T08:05:05.636438Z",
+      "ended_at": "2026-03-08T08:05:49.698283Z",
+      "log_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs/join.log",
+      "command": "/usr/bin/python3 /opt/fabric/benchmarks/run_workflows.py --api http://127.0.0.1:8083 --workflow join --outdir /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw --run-id run_009 --artifact-profile full --reason benchmark --timeout 600 --poll 2.0 --measure --collect-messages --phase-tags --peer-metrics-url http://localhost:9446/metrics --peer-metrics-prefix gossip_ --storage-path /var/lib/docker/volumes --storage-component 'peer=peer0\\.irs3\\.kit\\.edu' --storage-component 'orderer=orderer\\.kit\\.edu' --storage-slices --storage-topk 5 --proc-match 'orderer=(^|\\\\s)(/[^\\\\s]*/)?orderer(\\\\s|$)' --resources-interval 1.0 --resources-iface eth0 --resources-control-exclude-port 22 --resources-control-exclude-port 8083 --resources-control-exclude-port 9446 --gossip-convergence-timeout 30.0 --gossip-convergence-poll 1.0 --measurement-v2 --metrics /opt/fabric/state/irs3/metrics.jsonl"
+    }
+  ],
+  "generated_raw_resource_files": [
+    "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_csr_1772956991.csv",
+    "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_join_1772957105.csv",
+    "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_removal_1772957056.csv",
+    "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_revocation_1772957030.csv"
+  ],
+  "labeling": {
+    "status": "success",
+    "return_code": 0,
+    "log_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs/labeling.log",
+    "command": "/usr/bin/python3 /opt/fabric/benchmarks/label_resources.py --resources /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_csr_1772956991.csv /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_join_1772957105.csv /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_removal_1772957056.csv /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/resources_revocation_1772957030.csv --metrics /opt/fabric/state/irs3/metrics.jsonl --mode auto --outdir /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/labeled --merged-out /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/labeled/resources_all_labeled.csv --merged-phase-summary-out /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/labeled/resources_all_phase_summary.csv",
+    "outputs": {
+      "merged_labeled": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/labeled/resources_all_labeled.csv",
+      "merged_phase_summary": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/labeled/resources_all_phase_summary.csv"
+    }
+  },
+  "measurement_v2": {
+    "enabled": true,
+    "workflow_runs_v2_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/workflow_runs_v2.csv",
+    "event_source": "event_first_with_poll_fallback",
+    "tx_events_total": 56,
+    "tx_events_mapped": 56,
+    "tx_events_unmapped": 0,
+    "tx_events_mapped_committed": 7,
+    "tx_events_mapping_mode": "run_operation_id_primary_with_timestamp_fallback"
+  },
+  "query_benchmark": {
+    "enabled": true,
+    "status": "success",
+    "reason": "",
+    "trigger": "post_csr",
+    "return_code": 0,
+    "log_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/logs/query_bench.log",
+    "command": "/usr/bin/python3 /opt/fabric/benchmarks/benchmark_queries.py --api http://127.0.0.1:8083 --cert-id csr-irs3-1772956991 --iters 30 --warmup 5 --timeout 10.0 --outdir /opt/fabric/benchmarks/out/suite_20260308_084131/run_009/query --run-id run_009 --require-status-success --require-proof-success",
+    "query_cert_id": "csr-irs3-1772956991",
+    "query_cert_source": "auto_csr",
+    "resolved_query_cert_source": "auto_csr",
+    "workflow_runs_v2_rows": 1,
+    "workflow_runs_v2_fields": [
+      "workflow_base",
+      "workflow_tag",
+      "operation_id",
+      "proposal_id",
+      "epoch",
+      "submit_tx_id",
+      "execute_tx_id",
+      "status",
+      "error",
+      "client_start_ts",
+      "client_end_ts",
+      "submitted_observed_ts",
+      "voted_ts",
+      "approved_or_executed_ts",
+      "reshare_started_ts",
+      "reshare_completed_ts",
+      "cert_registered_ts",
+      "local_key_idle_ts",
+      "local_signing_idle_ts",
+      "ledger_tx_ts_submit",
+      "ledger_tx_ts_execute",
+      "submit_attempts",
+      "submit_retries_total",
+      "submit_retries_mvcc",
+      "submit_retries_non_mvcc",
+      "submit_retry_classes",
+      "tss_signing_compute_s",
+      "tss_signing_wait_s",
+      "tss_reshare_compute_s",
+      "tss_reshare_wait_s",
+      "tss_key_session_compute_s",
+      "tss_key_session_wait_s",
+      "tss_compute_proxy_s",
+      "tss_wait_proxy_s",
+      "gossip_height_before_max",
+      "gossip_height_after_max",
+      "gossip_target_height",
+      "gossip_height_delta",
+      "gossip_peers_observed",
+      "gossip_peers_converged",
+      "gossip_convergence_s",
+      "gossip_convergence_status"
+    ],
+    "require_status_success": true,
+    "require_proof_success": true,
+    "outputs": {
+      "query_bench_iterations": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/query/query_bench_iterations.csv",
+      "query_bench_summary": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/query/query_bench_summary.csv"
+    }
+  },
+  "artifact_profile": {
+    "selected": "full",
+    "files_removed": 0,
+    "bytes_freed": 0,
+    "run_dir_removed": false
+  },
+  "communication_measurement": {
+    "enabled": true,
+    "message_counts_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/message_counts.csv",
+    "message_rows": 4,
+    "message_fields": [
+      "ts_start",
+      "ts_end",
+      "workflow",
+      "proposal_id",
+      "tss_p2p_sent",
+      "tss_p2p_recv",
+      "tss_p2p_sent_broadcast",
+      "tss_p2p_sent_direct",
+      "tss_p2p_recv_broadcast",
+      "tss_p2p_recv_direct",
+      "tss_p2p_sent_by_type",
+      "tss_p2p_recv_by_type",
+      "gossip_metric_total"
+    ]
+  },
+  "storage_measurement": {
+    "enabled": true,
+    "storage_source_mode": "explicit",
+    "resolved_storage_paths": [
+      "/var/lib/docker/volumes"
+    ],
+    "storage_slices_enabled": true,
+    "storage_topk": 5,
+    "storage_component_rules_effective": [
+      {
+        "label": "peer",
+        "regex": "peer0\\.irs3\\.kit\\.edu"
+      },
+      {
+        "label": "orderer",
+        "regex": "orderer\\.kit\\.edu"
+      }
+    ],
+    "non_splittable_paths": [],
+    "warnings": [],
+    "meta_file": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/storage_measurement_meta.json",
+    "storage_rows": 4,
+    "paths_recorded": [
+      "/var/lib/docker/volumes"
+    ],
+    "rows_per_path": {
+      "/var/lib/docker/volumes": 4
+    },
+    "component_split_populated": true,
+    "storage_stage_files": {
+      "storage_stage_deltas": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/storage_stage_deltas.csv",
+      "storage_stage_volume_deltas": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/storage_stage_volume_deltas.csv",
+      "storage_stage_topk_volumes": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/storage_stage_topk_volumes.csv",
+      "storage_stage_peer_ledger_deltas": "/opt/fabric/benchmarks/out/suite_20260308_084131/run_009/raw/storage_stage_peer_ledger_deltas.csv"
+    },
+    "storage_stage_rows": {
+      "storage_stage_deltas": 21,
+      "storage_stage_volume_deltas": 210,
+      "storage_stage_topk_volumes": 105,
+      "storage_stage_peer_ledger_deltas": 21
+    },
+    "storage_stage_fields": {
+      "storage_stage_deltas": [
+        "run_id",
+        "workflow",
+        "workflow_tag",
+        "operation_id",
+        "proposal_id",
+        "epoch",
+        "stage_start",
+        "stage_end",
+        "ts_start",
+        "ts_end",
+        "path",
+        "bytes_before",
+        "bytes_after",
+        "delta_bytes",
+        "storage_component_splittable",
+        "storage_component_note",
+        "peer_volume_delta_bytes",
+        "orderer_volume_delta_bytes",
+        "other_volume_delta_bytes"
+      ],
+      "storage_stage_volume_deltas": [
+        "run_id",
+        "workflow",
+        "workflow_tag",
+        "operation_id",
+        "proposal_id",
+        "epoch",
+        "stage_start",
+        "stage_end",
+        "ts_start",
+        "ts_end",
+        "path",
+        "volume_name",
+        "component",
+        "bytes_before",
+        "bytes_after",
+        "delta_bytes"
+      ],
+      "storage_stage_topk_volumes": [
+        "run_id",
+        "workflow",
+        "workflow_tag",
+        "operation_id",
+        "proposal_id",
+        "epoch",
+        "stage_start",
+        "stage_end",
+        "ts_start",
+        "ts_end",
+        "path",
+        "rank",
+        "volume_name",
+        "component",
+        "delta_bytes",
+        "share_pct"
+      ],
+      "storage_stage_peer_ledger_deltas": [
+        "run_id",
+        "workflow",
+        "workflow_tag",
+        "operation_id",
+        "proposal_id",
+        "epoch",
+        "stage_start",
+        "stage_end",
+        "ts_start",
+        "ts_end",
+        "path",
+        "volume_name",
+        "component",
+        "peer_store_root",
+        "peer_volume_bytes_before",
+        "peer_volume_bytes_after",
+        "peer_volume_delta_bytes",
+        "block_files_bytes_before",
+        "block_files_bytes_after",
+        "block_files_delta_bytes",
+        "block_index_bytes_before",
+        "block_index_bytes_after",
+        "block_index_delta_bytes",
+        "leveldb_data_bytes_before",
+        "leveldb_data_bytes_after",
+        "leveldb_data_delta_bytes",
+        "leveldb_wal_meta_bytes_before",
+        "leveldb_wal_meta_bytes_after",
+        "leveldb_wal_meta_delta_bytes",
+        "peer_store_other_bytes_before",
+        "peer_store_other_bytes_after",
+        "peer_store_other_delta_bytes"
+      ]
+    }
+  },
+  "measurement_quality": {
+    "strict": true,
+    "failures": [],
+    "ok": true
+  }
+}

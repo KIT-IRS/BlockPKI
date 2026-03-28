@@ -1,0 +1,44 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={fill opacity=0.8, draw opacity=1, text opacity=1, draw=lightgray204},
+tick align=outside,
+tick pos=left,
+title={Average CPU/MEM by Workflow},
+x grid style={lightgray204},
+xmin=-0.535, xmax=3.535,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Percent},
+ymajorgrids,
+ymin=0, ymax=31.5987,
+ytick style={color=darkslategray51}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.35,0) rectangle (axis cs:0,25.195);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{cpu_avg}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.65,0) rectangle (axis cs:1,30.094);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.65,0) rectangle (axis cs:2,15.874);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.65,0) rectangle (axis cs:3,17.974);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.77555756156289e-17,0) rectangle (axis cs:0.35,25.432);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{mem_avg}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:1,0) rectangle (axis cs:1.35,25.495);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2,0) rectangle (axis cs:2.35,25.443);
+\draw[draw=none,fill=steelblue70100170] (axis cs:3,0) rectangle (axis cs:3.35,25.387);
+\end{axis}
+
+\end{tikzpicture}

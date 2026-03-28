@@ -1,0 +1,13 @@
+workflow_base,action,logical_write_bytes_total_count,logical_write_bytes_total_mean,logical_write_bytes_total_median,logical_write_bytes_total_sum,logical_write_bytes_total_max,logical_delete_bytes_total_count,logical_delete_bytes_total_mean,logical_delete_bytes_total_median,logical_delete_bytes_total_sum,logical_delete_bytes_total_max,logical_category_bytes_count,logical_category_bytes_mean,logical_category_bytes_median,logical_category_bytes_sum,logical_category_bytes_max
+csr,certificate_registered,40,11841.6,11842.0,473664.0,11850.0,40,0.0,0.0,0.0,0.0,40,2960.4,3294.0,118416.0,5218.0
+csr,csr_submitted,10,3424.4,3426.0,34244.0,3426.0,10,0.0,0.0,0.0,0.0,10,3424.4,3426.0,34244.0,3426.0
+csr,csr_voted,20,9078.6,9082.0,181572.0,9082.0,20,0.0,0.0,0.0,0.0,20,4539.3,4533.0,90786.0,7922.0
+join,member_join_approved,10,2695.8,2696.0,26958.0,2696.0,10,0.0,0.0,0.0,0.0,10,2695.8,2696.0,26958.0,2696.0
+join,member_join_requested,10,2875.2,2876.0,28752.0,2876.0,10,0.0,0.0,0.0,0.0,10,2875.2,2876.0,28752.0,2876.0
+join,member_join_voted,20,3811.0,3812.0,76220.0,3812.0,20,0.0,0.0,0.0,0.0,20,1905.5,1904.0,38110.0,3232.0
+removal,member_removal_proposed,10,1275.6,1276.0,12756.0,1276.0,10,0.0,0.0,0.0,0.0,10,1275.6,1276.0,12756.0,1276.0
+removal,member_removal_voted,20,4789.0,4790.0,95780.0,4790.0,20,0.0,0.0,0.0,0.0,20,2394.5,2391.0,47890.0,3622.0
+removal,member_removed,10,2343.8,2344.0,23438.0,2344.0,10,0.0,0.0,0.0,0.0,10,2343.8,2344.0,23438.0,2344.0
+revocation,certificate_revoked,20,6782.6,6782.0,135652.0,6790.0,20,38.0,38.0,760.0,38.0,20,3391.3,3389.0,67826.0,3618.0
+revocation,revocation_proposed,10,1213.6,1214.0,12136.0,1214.0,10,0.0,0.0,0.0,0.0,10,1213.6,1214.0,12136.0,1214.0
+revocation,revocation_voted,20,4665.0,4666.0,93300.0,4666.0,20,0.0,0.0,0.0,0.0,20,2332.5,2329.0,46650.0,3498.0
