@@ -2,27 +2,7 @@
 
 This folder contains scripts to capture benchmarks from the system
 
-The scripts can be run individually but for the thesis benchmarks, the aggregated suite with the invocation as described in the deployment readme was used.
-This automatically generates csv files and plots.
-
-## Quality Gate Caveat (Important)
-
-Default behavior is now:
-- strict quality gates disabled,
-- `--tx-event-unmapped-policy warn`.
-
-If you explicitly run strict mode with:
-- `--strict-measurement-quality`
-- `--tx-event-unmapped-policy fail`
-
-then any unmapped tx-event in the metrics stream will fail suite quality, even if all benchmark workflows succeed.
-
-Why this happens:
-- suite mapping uses operation/proposal IDs first, then timestamp window fallback,
-- shared/long-lived `metrics.jsonl` files usually contain unrelated background tx-events,
-- background events often cannot be mapped to a benchmark operation row.
-
-So a strict quality failure in this mode can mean "measurement stream not isolated", not necessarily "workflow execution broken".
+The most likely scenario is to use the commands provided in the  **[Deployment readme](./deployment/README.md)**
 
 
 ## 1) Enable Metrics (JSONL)
@@ -49,7 +29,6 @@ Events are emitted for:
 ```
 python3 benchmarks/compute_durations.py --metrics state/org1/metrics.jsonl --outdir benchmarks/out
 ```
-
 Outputs:
 - `events.csv`: raw events with timestamps
 - `durations.csv`: derived latencies per proposal/epoch
@@ -67,8 +46,6 @@ python3 benchmarks/label_resources.py \
   --mode csr \
   --out benchmarks/out/resources_csr_1771488811_labeled.csv
 ```
-Notes:
-- If `csr_api_received` is missing (e.g., you only have non-API peer metrics), the labeler uses the first resource sample as `csr_consensus_est`.
 
 Reshare example:
 ```
@@ -149,71 +126,4 @@ Use this after each workflow to estimate ledger growth per transaction set.
 
 ---
 
-## Results Cheat Sheet
 
-**Files and how to read them:**
-
-- `benchmarks/out/events.csv`  
-  Raw metrics events (one row per event). Useful for debugging event ordering or missing markers.
-
-- `benchmarks/out/durations.csv`  
-  Derived latencies per proposal/epoch:
-  - `type`: `csr`, `revocation`, `member_removal`, `join_request`, `reshare`
-  - `id`: proposal ID or epoch
-  - `reason`: reshare reason (if present)
-  - `proposal_s`: proposal submitted -> vote/ack
-  - `tss_s`: TSS signing/keygen duration (where applicable)
-  - `registration_s`: signing done -> recorded on-chain
-  - `total_s`: end-to-end latency
-
-- `benchmarks/out/resources_<workflow>.csv`  
-  Raw samples from `collect_resources.py`:
-  - `operation` tag (e.g., `csr_1771488645`)
-  - `phase` (e.g., `csr_submit`, `csr_wait_cert`)
-  - `cpu_total_pct`, `mem_used_pct`
-  - `rx_bytes`, `tx_bytes` for the chosen interface
-  - per-process CPU/MEM for `tss_peer`, `peer`, `orderer`
-
-- `benchmarks/out/resources_summary.csv`  
-  Per-workflow averages and maxima for CPU/MEM (total + per process).
-
-- `benchmarks/out/storage_deltas.csv`  
-  Per-workflow before/after storage deltas per `--storage-path`.
-
-- `benchmarks/out/storage.csv`  
-  Snapshot sizes per path from `measure_storage.sh` (run this after each workflow to compare).
-
-- `benchmarks/out/message_counts.csv`  
-  Per-workflow message totals:
-  - `tss_p2p_*`: counts from the TSS P2P layer
-  - `tss_p2p_*_by_type`: JSON map of `keygen` / `reshare` / `signing`
-  - `gossip_metric_total`: sum of Fabric peer metrics that match `--peer-metrics-prefix`
-
-**Sanity checks:**
-- If `durations.csv` is empty, ensure `TSS_METRICS_ENABLED=true` and that `state/<org>/metrics.jsonl` has events.
-- `collect_resources.py` uses `/proc`, so run it on Linux hosts only.
- - Gossip counts require Fabric peer Prometheus metrics to be enabled (operations endpoint + `CORE_METRICS_PROVIDER=prometheus`).
-- If strict quality fails with `tx_event_unmapped_policy_fail`, check `suite_manifest.json` (`measurement.tx_events_unmapped`) and `analysis/tx_event_coverage_by_workflow.csv` before treating the run as invalid.
-
-## 6) Recommended Test Configs
-
-Run the same benchmarks across multiple configs:
-- **N=2, quorum=50%** -> `t=1` (2-of-2)
-- **N=3, quorum=50%** -> `t=1` (2-of-3)
-- **N=3, quorum=67%** -> `t=2` (3-of-3)
-- **N=4, quorum=75%** -> `t=2` (3-of-4)
-- **N=5, quorum=60-67%** -> `t=3` (4-of-5)
-
-Also vary:
-- Observer count (0, 1, 2) to quantify ledger replication impact
-- Network latency (e.g., WAN vs LAN)
-
-## 7) Suggested Workflow Runs
-
-For each config, run:
-- CSR submission -> certificate registered
-- Membership add (join request) -> reshare completed
-- Membership removal -> reshare completed
-- Certificate revocation
-
-Record metrics + resources + storage before and after each run.
