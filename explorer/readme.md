@@ -8,10 +8,10 @@ organizations/ordererOrganizations/
 organizations/peerOrganizations/
 
 Then:
-docker-compose up -d
+`docker-compose up -d`
 
 and login with:
 
-exploreradmin
-exploreradminpw
+`exploreradmin`
+`exploreradminpw`
 

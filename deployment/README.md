@@ -85,6 +85,7 @@ generate.sh reads network-config.yaml
 
 ## 2. File Structure
 
+```text
 D:/fabric/fabric-samples
 ├── test-network/             # Same as upstream fabric-samples; only use custom copy if needed
 ├── chaincode/                # Chaincode definition
@@ -111,7 +112,7 @@ D:/fabric/fabric-samples
                 ├── channel-artifacts/
                 ├── peercfg/
                 └── tss-irs3.env / tss-irs3-<node>.env
-
+```
 
 ## 3. Deployment Deployment
 
