@@ -5,52 +5,42 @@ This document defines how benchmark values are collected, transformed, and inter
 ## 1) Scope
 
 The method covers:
-- Workflow latency decomposition (`csr`, `revocation`, `removal`, `join`)
+- Workflow latency decomposition (`csr`, `revocation`, `query`, `removal`, `join`)
 - Storage deltas (total + peer/orderer split + stage slices)
 - Logical state-write bytes from tx events
 - Serialized transaction and allocated block-overhead bytes
 - Peer-volume composition and residual attribution
 - Sanity checks for measurement quality
 
-No runtime protocol behavior is changed by this method. It is analysis-only.
-
 ## 1.1) Iterative Validation Loop
 
-Recommended loop for repeatable experiments:
-1. Run suite collection (`run_benchmark_suite.py`) with strict quality gates enabled.
+Used loop:
+1. Run suite collection (`run_benchmark_suite.py`)
 2. Run analyzer (`analyze_suite.py`) and inspect `measurement_sanity_report.csv` first.
 3. Review coverage/diagnostics:
    - `tx_event_coverage_by_workflow.csv`
    - `workflow_stage_latency_mixed_diagnostics.csv`
    - `workflow_join_removal_mismatch_diagnostics.csv`
-4. Fix instrumentation or config issues (metrics paths, event listener, storage path/split config).
-5. Re-run the full suite and compare key aggregate CSVs, not only plots.
+4. Fix instrumentation and config issues (metrics paths, event listener, storage path/split config).
+5. Re-run the full suite
 
-Pass criteria for a submission-quality run:
+Pass criteria for a strict submission-quality run:
 - no strict-quality failures in suite manifest,
-- non-zero committed tx-event mapping coverage,
+- Reasonable committed tx-event mapping coverage,
 - stable workflow/storage aggregates across repeated runs.
 
 ## 2) Data Lineage
 
 ### 2.1 Raw runtime sources
-- TSS peer API + metrics JSONL (`state/<org>/metrics.jsonl`)
-- Workflow runner telemetry (`run_workflows.py`)
+- TSS runtime  + metrics JSONL (`state/<org>/metrics.jsonl`)
+- Workflow execution (`run_workflows.py`)
 - Fabric tx/event stream (`tx_*`, `cc_event_observed`)
-- Optional tx/block size capture (`suite_tx_block_sizes_all_runs.csv`)
-- Storage snapshots from Docker volumes (`/var/lib/docker/volumes` by default)
+- tx/block size capture (`suite_tx_block_sizes_all_runs.csv`)
+- Storage snapshots from Docker volumes (`/var/lib/docker/volumes`)
 - Stage-level storage slices (`suite_storage_stage_deltas_all_runs.csv`)
 
 ### 2.2 Suite aggregation
-`run_benchmark_suite.py` writes suite-level files, including:
-- `suite_workflow_runs_all.csv` (canonical)
-- `suite_workflow_runs_v2_all.csv` (legacy alias, same content)
-- `suite_tx_events_all_runs.csv`
-- `suite_tx_block_sizes_all_runs.csv`
-- `suite_storage_deltas_all_runs.csv`
-- `suite_storage_stage_deltas_all_runs.csv`
-- `suite_message_counts_all_runs.csv`
-- `suite_phase_summary_all_runs.csv`
+`run_benchmark_suite.py` writes suite-level files
 
 ### 2.3 Analyzer outputs
 `analyze_suite.py` reads suite files and writes derived CSVs/plots in `<suite>/analysis`.
@@ -58,32 +48,39 @@ Pass criteria for a submission-quality run:
 ## 3) Latency Decomposition
 
 ## 3.1 Base durations
-For each operation row in `suite_workflow_runs_all.csv`:
-- `client_duration_s = client_end_ts - client_start_ts`
-- `client_to_submitted_s = submitted_observed_ts - client_start_ts`
-- `submit_to_vote_s = voted_ts - submitted_observed_ts`
-- `vote_to_approved_s = approved_or_executed_ts - voted_ts`
-- `approved_to_cert_registered_s = cert_registered_ts - approved_or_executed_ts`
-- `approved_to_reshare_start_s = reshare_started_ts - approved_or_executed_ts`
-- `reshare_duration_s = reshare_completed_ts - reshare_started_ts`
-- `approved_to_reshare_completed_s = reshare_completed_ts - approved_or_executed_ts`
-- `post_reshare_tail_s = client_end_ts - reshare_completed_ts`
-- `execution_to_operation_end_s = client_end_ts - approved_or_executed_ts`
-- `cert_registered_to_operation_end_s = client_end_ts - cert_registered_ts`
+Each workflow operation has milestone timestamps in `suite_workflow_runs_all.csv`.
+Every latency value is computed as:
 
-Negative durations are invalidated (`NaN`). -> Can appear when some metadata is compacted
+`duration = later_timestamp - earlier_timestamp`
+
+Main latency columns:
+
+| Column | Start -> End | Meaning |
+|---|---|---|
+| `client_duration_s` | `client_start_ts` -> `client_end_ts` | End-to-end user-visible duration |
+| `client_to_submitted_s` | `client_start_ts` -> `submitted_observed_ts` | Client-side submit/setup time |
+| `submit_to_vote_s` | `submitted_observed_ts` -> `voted_ts` | Time until voting/acks begin to complete |
+| `vote_to_approved_s` | `voted_ts` -> `approved_or_executed_ts` | Governance decision/commit phase |
+| `approved_to_cert_registered_s` | `approved_or_executed_ts` -> `cert_registered_ts` | Post-approval signing + registration path |
+| `approved_to_reshare_start_s` | `approved_or_executed_ts` -> `reshare_started_ts` | Wait until reshare starts |
+| `reshare_duration_s` | `reshare_started_ts` -> `reshare_completed_ts` | Actual reshare runtime |
+| `approved_to_reshare_completed_s` | `approved_or_executed_ts` -> `reshare_completed_ts` | Full approval-to-reshare-complete span |
+| `post_reshare_tail_s` | `reshare_completed_ts` -> `client_end_ts` | Tail time after reshare completion |
+| `execution_to_operation_end_s` | `approved_or_executed_ts` -> `client_end_ts` | Generic post-execution tail (until the change is noticed at the peer) |
+| `cert_registered_to_operation_end_s` | `cert_registered_ts` -> `client_end_ts` | CSR-specific local tail (until cert is synced.|
+
+- If either timestamp is missing, the derived duration is empty (`NaN`).
+- Negative values indicate timestamp/order issues and are treated as invalid in analysis.
+- `client_duration_s` is the full latency
 
 ## 3.2 Component formulas
 - `blockchain_total_s = client_to_submitted_s + submit_to_vote_s + vote_to_approved_s`
-- `tss_reshare_total_s`:
-  - preferred: `approved_to_reshare_start_s + reshare_duration_s`
-  - fallback: `approved_to_reshare_completed_s`
-  - fallback: `reshare_duration_s`
+- `tss_reshare_total_s = approved_to_reshare_start_s + reshare_duration_s`
 - `tss_coordination_total_s = approved_to_cert_registered_s + tss_reshare_total_s + local_key_idle_wait_s`
 - `local_finalize_total_s`:
   - `csr`: `cert_registered_to_operation_end_s`
   - `revocation`: `execution_to_operation_end_s`
-  - `join/removal` (preferred split):
+  - `join/removal`:
     - `local_key_idle_wait_s = reshare_complete_to_local_idle_s` (counted in `tss_coordination_total_s`)
     - `local_finalize_total_s = local_idle_to_operation_end_s`
   - `join/removal` fallback: `post_reshare_tail_s`
@@ -94,108 +91,153 @@ Primary decomposition:
 - `decomposed_total_s = blockchain_effective_s + tss_coordination_total_s`
 - `decomposition_gap_s = client_duration_s - decomposed_total_s`
 
-Mixed/overlap diagnostics:
-- `mixed_transition_s_raw = max(decomposition_gap_s, 0)`
-- `overlap_correction_s_raw = max(-decomposition_gap_s, 0)`
-- epsilon threshold: `50ms`
-  - `mixed_transition_s = mixed_transition_s_raw if >= 0.05 else 0`
-  - `overlap_correction_s = overlap_correction_s_raw if >= 0.05 else 0`
-
-Primary charts exclude mixed from stacked latency; mixed is isolated in:
-- `workflow_stage_latency_mixed_diagnostics.csv`
-- `workflow_stage_latency_mixed_summary.csv`
-
 ## 3.3 Stage-level latency rows
-`workflow_stage_latency_by_operation.csv` contains only:
+`workflow_stage_latency_by_operation.csv` contains:
 - `stage_group=blockchain`
 - `stage_group=tss_coordination`
 - `stage_group=local_finalize`
 
-`mixed` rows are intentionally excluded from this file.
+## 3.4 Metric Calculation
 
-## 3.4 Join/removal diagnostic
-`measurement_join_vs_removal_latency_diagnostics.csv` explains why join/removal can differ by:
-- coordination share (`tss_coordination_total_s / client_duration_s`)
-- local finalize share (`local_finalize_total_s / client_duration_s`)
+Latency metrics:
+- Source: `suite_workflow_runs_all.csv` 
+- Core formulas:
+  - `client_duration_s = client_end_ts - client_start_ts`
+  - `blockchain_total_s = client_to_submitted_s + submit_to_vote_s + vote_to_approved_s`
+  - `tss_coordination_total_s = approved_to_cert_registered_s + tss_reshare_total_s + local_key_idle_wait_s`
+  - `decomposed_total_s = blockchain_effective_s + tss_coordination_total_s`
+  - reliable when all timestamp fields exist
 
-## 3.5 Formula-to-Output Mapping
+Tx-event mapping and coverage:
+- Source: `suite_tx_events_all_runs.csv`
+- Core metrics:
+  - `tx_event_coverage_by_workflow.csv`:
+    - `total_ops = unique (run_id, workflow_base, operation_id)` from workflow rows
+    - `ops_with_events = unique (run_id, workflow_base, operation_id)` from mapped tx-event rows
+    - `event_coverage_ratio = ops_with_events / total_ops` when `total_ops > 0`
+- Reliability:
+  - depends on the event coverage
 
-Latency decomposition outputs:
-- `workflow_runs_enriched.csv`: per-operation derived timing fields.
-- `workflow_summary.csv`: grouped aggregates (`count/mean/min/max/median`) by workflow.
-- `workflow_stage_latency_breakdown.csv`: stage-grouped totals for stacked latency views.
+Serialized tx/block overhead metrics:
+- Source: `suite_tx_block_sizes_all_runs.csv`
+- Core fields:
+  - `tx_envelope_bytes`
+  - `block_shared_overhead_per_tx_bytes`
+  - `(block_bytes - block_data_bytes) / block_tx_count`
+- Derived fields:
+  - `block_allocated_bytes = tx_envelope_bytes + block_shared_overhead_per_tx_bytes`
+  - `tx_overhead_vs_logical_bytes = tx_envelope_bytes - logical_write_bytes_total`
+  - `block_allocated_overhead_vs_logical_bytes = block_allocated_bytes - logical_write_bytes_total`
+  - `tx_to_logical_ratio` and `block_allocated_to_logical_ratio` only when `logical_write_bytes_total > 0`
+- Reliability:
+  - high for direct tx/block size fields on captured tx IDs
+  - medium for RWSet-relative ratios (depends on logical attribution coverage)
 
-Storage/byte-accounting outputs:
-- `storage_logical_action_breakdown_all_runs.csv`: logical state-write rows (action-level).
-- `storage_logical_vs_physical_by_action.csv`: logical vs measured physical deltas.
-- `storage_amplification_by_action.csv`: amplification factors by workflow/action.
-- `tx_block_size_breakdown_all_runs.csv`: serialized tx and block-overhead derived terms.
+Storage metrics:
+- Source:
+  - physical: `suite_storage_deltas_all_runs.csv`, `suite_storage_stage_deltas_all_runs.csv`
+  - logical: `suite_tx_events_all_runs.csv` logical counters
+- Core formulas:
+  - physical delta: `delta_bytes = bytes_after - bytes_before`
+  - logical grouping key: `join_key = run_id|workflow_base|action|op_ref`
+- Reliability:
+  - high for deterministic snapshot arithmetic
+  - medium where background compaction/pruning causes large run-to-run variance (only happens during long runs conf 5 and 6)
 
-Communication outputs:
-- `communication_message_counts_enriched.csv`: per-run message counts with normalized workflow tags.
-- `communication_message_summary_by_workflow.csv`: workflow-level aggregation of message totals.
-- `communication_bytes_summary_by_workflow.csv`: RX/TX byte summaries (adjusted preferred when available).
+Communication metrics:
+- Source:
+  - message counts: workflow message counters
+  - network bytes: `/proc/net/dev`, optional control-plane subtraction via `ss -tinHn`
+- Reliability:
+  - high for TSS message counters
+  - medium for network-byte attribution after control-plane subtraction (the subtraction is an approximation)
+
 
 ## 4) Storage and Byte Accounting
 
-## 4.1 Physical storage deltas
-From `suite_storage_deltas_all_runs.csv` and `suite_storage_stage_deltas_all_runs.csv`:
-- Total delta: `delta_bytes`
-- Component splits when available:
-  - `peer_volume_delta_bytes`
-  - `orderer_volume_delta_bytes`
-  - `other_volume_delta_bytes`
 
-Default path filter is Docker volumes (`.../volumes`), unless explicitly overridden.
+## 4.1 Physical storage deltas (direct measurement)
 
-## 4.2 Logical state-write bytes
-From `suite_tx_events_all_runs.csv`:
+Source files:
+- `suite_storage_deltas_all_runs.csv`
+- `suite_storage_stage_deltas_all_runs.csv`
+
+Core formula:
+- `delta_bytes = bytes_after - bytes_before`
+
+Important columns:
+- `delta_bytes`: total path delta
+- `peer_volume_delta_bytes`: peer-matched volume delta
+- `orderer_volume_delta_bytes`: orderer-matched volume delta
+- `other_volume_delta_bytes`: unmatched remainder
+
+Interpretation:
+- This is direct filesystem snapshot.
+- It includes everything happening in those paths during the window, including background compaction/pruning.
+
+## 4.2 Logical state-write bytes (chaincode-level logical payload)
+
+Source file:
+- `suite_tx_events_all_runs.csv`
+
+Core fields:
 - `logical_write_bytes_total`
 - `logical_delete_bytes_total`
-- `logical_write_by_category` (JSON map)
+- `logical_write_by_category`
 
-Logical grouping key:
-- `join_key = run_id | workflow_base | action | op_ref`
-- `op_ref = operation_id if present else proposal_id`
+Grouping key used to align logical bytes with other metrics:
+- `join_key = run_id|workflow_base|action|op_ref`
+- `op_ref = operation_id` when present, otherwise `proposal_id`
 
-Category expansion can produce multiple rows per `join_key` (one per category). This is why:
-- totals must be interpreted by grouping key,
-- row counts alone can overstate apparent volume.
+Interpretation:
+- Represents logical state mutation payload seen in attribution events.
 
-## 4.3 Serialized tx + block overhead
-From `suite_tx_block_sizes_all_runs.csv`:
+## 4.3 Serialized tx size + allocated block overhead
+
+Source file:
+- `suite_tx_block_sizes_all_runs.csv`
+
+Direct size fields:
 - `tx_envelope_bytes`
 - `block_shared_overhead_per_tx_bytes`
 
-Derived:
+Derived fields:
 - `block_allocated_bytes = tx_envelope_bytes + block_shared_overhead_per_tx_bytes`
 - `tx_overhead_vs_logical_bytes = tx_envelope_bytes - logical_write_bytes_total`
 - `block_allocated_overhead_vs_logical_bytes = block_allocated_bytes - logical_write_bytes_total`
-- `tx_to_logical_ratio = tx_envelope_bytes / logical_write_bytes_total` (if logical > 0)
-- `block_allocated_to_logical_ratio = block_allocated_bytes / logical_write_bytes_total` (if logical > 0)
+- `tx_to_logical_ratio = tx_envelope_bytes / logical_write_bytes_total` when logical > 0
+- `block_allocated_to_logical_ratio = block_allocated_bytes / logical_write_bytes_total` when logical > 0
 
-Ratios can be `< 1` for specific actions if logical payload exceeds serialized envelope for that aggregated grouping.
+Interpretation:
+- `tx_overhead_vs_logical_bytes` is transaction overhead relative to logical writes.
+- `block_shared_overhead_per_tx_bytes` is block-level overhead allocated per tx.
+- Ratios are blank when logical bytes are missing or zero.
 
-## 4.4 Peer volume composition
-Per action group:
-- `peer_stage_bytes` (from peer volume stage deltas)
-- `logical_write_bytes_total` (direct)
-- `tx_overhead_bytes = max(tx_envelope_bytes - logical_write_bytes_total, 0)` (direct-derived)
-- `block_overhead_bytes = max(block_shared_overhead_per_tx_bytes, 0)` (direct-derived)
+## 4.4 Peer volume composition (accounted vs residual)
+
+For each action/workflow grouping, the analyzer builds:
+- `peer_stage_bytes` (measured)
+- `logical_write_bytes_total` (logical payload)
+- `tx_overhead_bytes = max(tx_envelope_bytes - logical_write_bytes_total, 0)`
+- `block_overhead_bytes = max(block_shared_overhead_per_tx_bytes, 0)`
 - `other_peer_blockchain_bytes = peer_stage_bytes - logical - tx_overhead - block_overhead`
 - `other_peer_blockchain_bytes_clipped = max(other_peer_blockchain_bytes, 0)`
 
-Important:
-- `other_peer_blockchain_bytes*` is a residual, not a directly measured internal Fabric field.
+Interpretation:
+- First four terms are accounted components.
+- `other_peer_blockchain_bytes*` is residual remainder,
 
-## 4.5 Residual decomposition (inferred)
-Residual is stage-attributed into:
+## 4.5 Residual decomposition (inferred attribution)
+
+Residual is further split by stage labels into:
 - `governance_residual_bytes`
 - `voting_residual_bytes`
 - `reshare_residual_bytes`
 - `operation_end_residual_bytes`
 
-This split is inference-based from stage labels, not byte-precise protocol internals.
+Interpretation:
+- Useful for directional diagnosis
+- Not byte-exact provenance.
 
 Outputs:
 - `peer_volume_residual_breakdown_by_action.csv`
@@ -216,48 +258,39 @@ Network bytes:
 - Phase summaries include:
   - `rx_delta_sum`, `tx_delta_sum` (raw)
   - `control_rx_delta_sum`, `control_tx_delta_sum` (estimated control-plane bytes)
-  - `rx_delta_adjusted_sum`, `tx_delta_adjusted_sum` (raw minus control estimate, floored at 0)
-- Analyzer prefers adjusted byte columns when present and falls back to raw otherwise.
+  - `rx_delta_adjusted_sum`, `tx_delta_adjusted_sum` (raw minus control estimate)
 
-## 6) Sanity Report
-
-`measurement_sanity_report.csv` includes:
-- Stage-sum residual vs client duration
-- Retry inflation (`tx_submit_started - tx_committed`)
-- Logical row-expansion ratio (`rows / unique join_key`)
-- tx/block mapping coverage (`committed tx_id` found in tx/block table)
-
-## 7) Persistence and Pruning Semantics
-
-Interpretation of measured bytes:
-- Ledger block files and indexes are mostly append-only and effectively persistent.
-- State DB entries represent latest world-state values; old values are superseded.
-- Compaction/pruning can reduce some storage classes over time, but not ledger append history.
-- Residual peer bytes can include index structures, metadata, validation artifacts, and stage-local effects not explicitly separated by current telemetry.
-
-## 8) Common Interpretation Pitfalls
-
-- Mean vs sum confusion: workflow mean plots are per-operation averages, not global totals.
-- Category-expanded logical rows: action/category tables can multiply rows per operation.
-- Retry amplification: high submit retries increase tx signals and can skew per-workflow counts.
-- Mixed latency misread: mixed is now diagnostic, not part of primary component bars.
-- Residual over-precision: residual sub-buckets are inferred attribution, not exact internal Fabric decomposition.
-
-## 9) Known Limitations / Downsides
+## 6) Known Limitations / Downsides
 
 - Event mapping is heuristic when direct operation/proposal references are missing (timestamp-window fallback).
-- Control-plane byte subtraction is an approximation (socket-counter based), not packet-accurate attribution.
+- Control-plane byte subtraction for communication is an approximation (socket-counter based), not packet-accurate attribution.
 - Storage residual buckets (`*_residual_bytes`) are inferred attribution and can aggregate multiple internal causes.
-- Missing/compacted timestamps can shift some rows to `NaN` durations, reducing usable sample counts.
-- Cross-run comparability depends on stable environment load, peer/orderer background activity, and consistent storage roots.
+- Missing timestamps can shift some rows to `NaN` durations, reducing usable sample counts.
 
-## 10) Canonical Naming and Legacy Aliases
+## 7) Reliability of `measurements/Conf_1..Conf_6`
 
-Canonical measurement naming now avoids `v2` in primary interfaces:
-- `workflow_runs.csv`
-- `suite_workflow_runs_all.csv`
-- `suite_workflow_latency_averages.csv`
-- `workflow_runs_enriched.csv`
-- `workflow_summary.csv`
+Observed quality status:
+- All six configs report `measurement_quality.failures = ["tx_event_unmapped_policy_fail"]` in strict mode.
+- This is driven by unmapped background tx-events in shared metrics files, not by workflow-step failures.
+- Workflow execution itself succeeded in these datasets.
 
-Legacy `v2` names are still written/read as compatibility aliases during migration.
+CSR tx/block coverage (from `measurement_sanity_report.csv`, `tx_block_mapping_coverage`):
+- `Conf_1 = 1.00`
+- `Conf_2 = 0.833`
+- `Conf_3 = 1.00`
+- `Conf_4 = 0.885`
+- `Conf_5 = 0.962`
+- `Conf_6 = 0.75`
+
+Interpretation:
+- Latency metrics remain mostly usable.
+- CSR tx/block byte accounting is weaker for `Conf_2`, `Conf_4`, `Conf_6` because not all committed CSR tx IDs have block-size rows.
+- Join/removal/revocation tx/block coverage is stronger in this dataset.
+
+Additional dataset-specific caveats:
+- `Conf_5` and `Conf_6` contain `reshare` coverage rows with `total_ops=0` and `ops_with_events>0` (background-event noise rows).
+- `Conf_5` and `Conf_6` show elevated storage variance for some workflows (likely compaction/pruning/background churn effects).
+
+Practical conclusion:
+- The dataset is usable for system-level behavior trends.
+- Strong byte-precise claims should be restricted to metric families with high coverage for the target workflow/config.

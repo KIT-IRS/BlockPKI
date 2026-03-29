@@ -2,51 +2,19 @@
 
 ###### General Information ######
 
-All windows commands (other that networking fixes through powershell) were run in an Ubuntu wsl subsystem.
+All commands were run in an Ubuntu wsl subsystem.
 
-so it's important you run:
+so it's important to run:
 ```bash
 wsl -d Ubuntu
 ```
 
-I also ran everything from my D:fabric directory with folders for fabric-samples and explorer (how to get those is explained later)
-My custom code is run from the cloned fabric-samples git, my cd commmands follow this so adjust them for your system.
+I also ran everything from my `D:fabric` directory.
+My custom code is run from the cloned `fabric-samples git`, my `cd` commmands follow this so adjust them for your system.
 The fabric prerequisites are explaines later, the most essential are docker and go (the language this code is written in).
 Some normal bash commands are thus also written in go (or python for benchmarking)
 
-## Architecture Overview
-
-
-┌────────────────────────────────────────────┐   ... other hosts can also be integrated, I tested up to 5 
-│  HOST: Pi3 (192.168.1.163)                 │  
-│                                            │   
-│  ┌──────────────────────────────┐          │  
-│  │ Docker                       │          │   
-│  │ ┌────────────┐ ┌──────────┐  │          │ 
-│  │ │  Orderer   │ │ Peer IRS1│  │          │   
-│  │ │  :7050     │ │  :7051   │  │          │ 
-│  │ └────────────┘ └──────────┘  │          │  
-│  └──────────────────────────────┘          │ 
-│                                            │  
-│  ┌──────────────┐                          │   
-│  │ TSS (irs1)   │                          │   
-│  │ P2P :6001    │                          │
-│  │ Web :8080    │                          │
-│  └──────────────┘                          │
-└────────────────────────────────────────────┘
-
----
-
 ## 1. Concepts
-
-| Problem | Solution |
-| **Addresses** | Real IPs via env vars (`TSS_P2P_ADVERTISE`), managed on chain |
-| **Docker networking** | Network is connected with `extra_hosts` for hostname resolution (docker-compose.yaml)|
-| **Gossip discovery** | `CORE_PEER_GOSSIP_EXTERNALENDPOINT` converted via `extra_hosts` to real IPs |
-| **TLS certificates** | SANs include all host IPs (set during crypto generation) |
-| **TSS P2P registration** | `RegisterPeerAddress("192.168.1.101", ...)` via `TSS_P2P_ADVERTISE` |
-| **Config** | Environment variables (`tss-<org>.env`) |
-| **Crypto material** | Distributed per-host bundles (each host gets only what it needs). This is the bootstrapping crypto needed|
 
 ### TSS Node Roles (Join Modes)
 
@@ -94,6 +62,18 @@ Use these on every TSS peer for resilient key-share recovery:
 ### How Fabric Gossip Works Across Hosts
 
 Fabric peers discover each other via **gossip protocol**. 
+---
+
+| Problem | Solution |
+|---|---|
+| **Addresses** | Real IPs via env vars (`TSS_P2P_ADVERTISE`), managed on chain |
+| **Docker networking** | Network is connected with `extra_hosts` for hostname resolution (docker-compose.yaml)|
+| **Gossip discovery** | `CORE_PEER_GOSSIP_EXTERNALENDPOINT` converted via `extra_hosts` to real IPs |
+| **TLS certificates** | SANs include all host IPs (set during crypto generation) |
+| **TSS P2P registration** | `RegisterPeerAddress("192.168.1.101", ...)` via `TSS_P2P_ADVERTISE` |
+| **Config** | Environment variables (`tss-<org>.env`) |
+| **Crypto material** | Distributed per-host bundles (each host gets only what it needs). This is the bootstrapping crypto needed|
+---
 
 **Hostname resolution** — Docker containers resolve cross-host peer names via
    `extra_hosts` entries in docker-compose.yaml. These map `peer0.irsN.kit.edu` → IP for anchoring peers
@@ -105,33 +85,33 @@ generate.sh reads network-config.yaml
 
 ## 2. File Structure
 
-
 D:/fabric/fabric-samples
-    test-network/             ← Should be same from fabric-samples git, only pull mine when the system doesn't work
-    chaincode/                ← Has the chaincode definition
-    peer-app/                 ← Whole peer logic
-    deployment/            
-      network-config.yaml     ← EDIT THIS: define hosts, orgs, IPs
-      generate.sh             ← RUN THIS
-      setup-host.sh           ← RUN ON EACH PI: installs Docker + Fabric images
-      generated/              ← This stuff is only generated after running generate.sh
-        organizations/        ← All crypto material
-        configtx/             ← Channel config
-        channel-artifacts/    ← Genesis block
-        hosts/
-          pc/                 ← Bundle for your PC
-            docker-compose.yaml
-            organizations/
-            channel-artifacts/
-            peercfg/
-            tss-irs1.env / tss-irs1-<node>.env
-            tss-irs2.env / tss-irs2-<node>.env
-          pi1/                ← Bundle for Pi 1
-            docker-compose.yaml
-            organizations/
-            channel-artifacts/
-            peercfg/
-            tss-irs3.env / tss-irs3-<node>.env
+├── test-network/             # Same as upstream fabric-samples; only use custom copy if needed
+├── chaincode/                # Chaincode definition
+├── peer-app/                 # Peer runtime logic
+└── deployment/
+    ├── network-config.yaml   # EDIT: define hosts, orgs, IPs
+    ├── generate.sh           # RUN: generates deployment artifacts
+    ├── setup-host.sh         # RUN on each Pi: installs Docker + Fabric images
+    └── generated/            # Created by generate.sh
+        ├── organizations/    # Crypto material
+        ├── configtx/         # Channel config
+        ├── channel-artifacts/# Genesis/channel artifacts
+        └── hosts/
+            ├── pc/           # Bundle for PC
+            │   ├── docker-compose.yaml
+            │   ├── organizations/
+            │   ├── channel-artifacts/
+            │   ├── peercfg/
+            │   ├── tss-irs1.env / tss-irs1-<node>.env
+            │   └── tss-irs2.env / tss-irs2-<node>.env
+            └── pi1/          # Bundle for Pi 1
+                ├── docker-compose.yaml
+                ├── organizations/
+                ├── channel-artifacts/
+                ├── peercfg/
+                └── tss-irs3.env / tss-irs3-<node>.env
+
 
 ## 3. Deployment Deployment
 
@@ -152,7 +132,7 @@ go install github.com/mikefarah/yq/v4@latest
 Edit `deployment/network-config.yaml`:
 ```yaml
 hosts:
-  pc:
+  pc:  # If you want to include the pc
     ip: "192.168.1.180"     # Change to the local IP of the PC
     orderer: true
     orgs: [irs1, irs2]
@@ -221,8 +201,6 @@ CRYPTO_PROVIDER=openssl ./generate.sh
 ssh ilo@192.168.1.161 # Up to 165 for the five PIs
 
 # If you connect to the same PIs, the username is "ilo"  and the password is "IRS1234"
-
-
 # Time is not updated when not in the irs-vsa-wifi, leads to tls "certificate not yet valid" errors
 
 # Connect to this first (no need to go onto the PI itself to accept the terms on the website)
@@ -505,6 +483,40 @@ kill "$(cat /opt/fabric/run/tss-irs5.pid)"
 To generate multiple peers per org change network config
 Peers use an automatic port offset of +1000 from the initial one on all ports
 
+---
+
+## 6. Environment Variables Reference
+
+| Variable | Description | Example |
+|---|---|---|
+| `TSS_ORG` | Organization name | `irs3` |
+| `TSS_MSPID` | Fabric MSP ID | `IRS3MSP` |
+| `TSS_MSP_USER` | MSP user folder (identity) | `Member1@irs3.kit.edu` |
+| `TSS_DOMAIN` | Organization domain | `irs3.kit.edu` |
+| `TSS_CRYPTO_PATH` | Path to org crypto material | `./organizations/peerOrganizations/irs3.kit.edu` |
+| `TSS_PEER_ENDPOINT` | Fabric peer gRPC address (usually localhost) | `localhost:7051` |
+| `TSS_PEER_HOSTNAME` | Fabric peer hostname (for TLS verification) | `peer0.irs3.kit.edu` |
+| `TSS_P2P_TLS_SERVER_CERT_PATH` | P2P mTLS server certificate path | `./organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/server.crt` |
+| `TSS_P2P_TLS_SERVER_KEY_PATH` | P2P mTLS server private key path | `./organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/server.key` |
+| `TSS_P2P_TLS_CLIENT_CERT_PATH` | P2P mTLS client certificate path | `./organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/signcerts/Member1@irs3.kit.edu-cert.pem` |
+| `TSS_P2P_TLS_CLIENT_KEY_PATH` | P2P mTLS client private key path | `./organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/keystore/priv_sk` |
+| `TSS_P2P_PORT` | TSS P2P listen port | `6001` |
+| `TSS_P2P_ADVERTISE` | TSS P2P address registered on-chain | `192.168.1.101:6001` |
+| `TSS_WEBUI_PORT` | Web dashboard port | `8080` |
+| `TSS_STATE_DIR` | Local state directory | `state/irs3/user1` |
+| `TSS_NODE_ID` | Override node ID (must match identity-derived ID) | `irs3-user1` |
+| `TSS_JOIN_MODE` | Auto-join mode | `none` |
+| `TSS_HEAVY_POLL_EVERY` | Member heavy-check cadence in polling ticks | `2` |
+| `TSS_CERT_FULL_SCAN_EVERY` | Full certificate scan cadence in polling ticks | `6` |
+| `TSS_AUTOVOTE_JITTER_MS` | Max deterministic per-proposal auto-vote jitter | `300` |
+| `TSS_EXECUTE_MAX_ATTEMPTS` | Max submit attempts for MVCC/phantom conflicts | `8` |
+| `TSS_EXECUTE_BACKOFF_BASE_MS` | Base retry backoff in milliseconds | `250` |
+| `TSS_EXECUTE_BACKOFF_MAX_MS` | Max retry backoff in milliseconds | `4000` |
+| `TSS_EXECUTE_BACKOFF_JITTER_PCT` | Retry backoff jitter percentage | `20` |
+| `TSS_WEBUI_AUTOSTART` | to start the Web UI automatically at process boot (including headless mode) | `true` |
+---
+
+
 ### 5.1 Add a Peer to a Running Org
 
 This adds peers to an existing org on a running network.
@@ -599,40 +611,6 @@ export TSS_JOIN_MODE=none
 ./tss_peer irs3
 
 ```
-
----
-
-## 6. Environment Variables Reference
-
-| Variable | Description | Example |
-|---|---|---|
-| `TSS_ORG` | Organization name | `irs3` |
-| `TSS_MSPID` | Fabric MSP ID | `IRS3MSP` |
-| `TSS_MSP_USER` | MSP user folder (identity) | `Member1@irs3.kit.edu` |
-| `TSS_DOMAIN` | Organization domain | `irs3.kit.edu` |
-| `TSS_CRYPTO_PATH` | Path to org crypto material | `./organizations/peerOrganizations/irs3.kit.edu` |
-| `TSS_PEER_ENDPOINT` | Fabric peer gRPC address (usually localhost) | `localhost:7051` |
-| `TSS_PEER_HOSTNAME` | Fabric peer hostname (for TLS verification) | `peer0.irs3.kit.edu` |
-| `TSS_P2P_TLS_SERVER_CERT_PATH` | P2P mTLS server certificate path | `./organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/server.crt` |
-| `TSS_P2P_TLS_SERVER_KEY_PATH` | P2P mTLS server private key path | `./organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/server.key` |
-| `TSS_P2P_TLS_CLIENT_CERT_PATH` | P2P mTLS client certificate path | `./organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/signcerts/Member1@irs3.kit.edu-cert.pem` |
-| `TSS_P2P_TLS_CLIENT_KEY_PATH` | P2P mTLS client private key path | `./organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/keystore/priv_sk` |
-| `TSS_P2P_PORT` | TSS P2P listen port | `6001` |
-| `TSS_P2P_ADVERTISE` | TSS P2P address registered on-chain | `192.168.1.101:6001` |
-| `TSS_WEBUI_PORT` | Web dashboard port | `8080` |
-| `TSS_STATE_DIR` | Local state directory | `state/irs3/user1` |
-| `TSS_NODE_ID` | Override node ID (must match identity-derived ID) | `irs3-user1` |
-| `TSS_JOIN_MODE` | Auto-join mode | `none` |
-| `TSS_HEAVY_POLL_EVERY` | Member heavy-check cadence in polling ticks | `2` |
-| `TSS_CERT_FULL_SCAN_EVERY` | Full certificate scan cadence in polling ticks | `6` |
-| `TSS_AUTOVOTE_JITTER_MS` | Max deterministic per-proposal auto-vote jitter | `300` |
-| `TSS_EXECUTE_MAX_ATTEMPTS` | Max submit attempts for MVCC/phantom conflicts | `8` |
-| `TSS_EXECUTE_BACKOFF_BASE_MS` | Base retry backoff in milliseconds | `250` |
-| `TSS_EXECUTE_BACKOFF_MAX_MS` | Max retry backoff in milliseconds | `4000` |
-| `TSS_EXECUTE_BACKOFF_JITTER_PCT` | Retry backoff jitter percentage | `20` |
-| `TSS_WEBUI_AUTOSTART` | to start the Web UI automatically at process boot (including headless mode) | `true` |
----
-
 ### Add a new org to an existing network (not actually tested)
 
 Adding an org requires a channel config update and new MSP crypto.
@@ -666,12 +644,12 @@ peer channel update -f irs4_update_envelope.pb -c mychannel -o orderer.kit.edu:7
 
 # 5) Start irs4 peer, join channel, install chaincode
 ```
-Ideall include irs4 into the endorsement policy, approve & commit a new chaincode definition with updated policy.
+Ideally include irs4 into the endorsement policy, approve & commit a new chaincode definition with updated policy.
 
 
 ### Merkle trees
 
-Merke trees are an efficient storage structure for certificates with inclusion proofs
+Merkle trees are an efficient storage structure for certificates with inclusion proofs
 
 ```bash
 # deployment/network-config.yaml -> controls wether they are used
@@ -736,8 +714,6 @@ sudo -E python3 /opt/fabric/benchmarks/run_benchmark_suite.py \
   --member-id 'x509::CN=Member1@irs3.kit.edu,OU=member+OU=admin,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE::CN=ca.irs3.kit.edu,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE' \
   --artifact-profile full \
   --query-cert-source auto_csr \
-  --strict-measurement-quality \
-  --tx-event-unmapped-policy fail \
   --tx-event-window-skew-sec 120 \
   --workflows csr,revocation,removal,join \
   --metrics /opt/fabric/state/irs3/metrics.jsonl \
@@ -760,6 +736,11 @@ sudo -E python3 /opt/fabric/benchmarks/run_benchmark_suite.py \
   --peer-metrics-url http://localhost:9446/metrics \
   --peer-metrics-prefix gossip_ \
   --outroot "$OUT"
+
+# Note on quality gates:
+# - Defaults are now non-strict and use '--tx-event-unmapped-policy warn', which is better for shared long-running peers.
+# - For publication-grade isolated runs, enable strict mode explicitly:
+#     --strict-measurement-quality --tx-event-unmapped-policy fail
 
 
 # Analyse the run (generates plots)

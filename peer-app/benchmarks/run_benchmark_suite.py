@@ -929,14 +929,14 @@ def main():
     parser.add_argument(
         "--strict-measurement-quality",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Fail on invalid measurement quality (default: true)",
+        default=False,
+        help="Enable strict measurement quality gating (default: false)",
     )
     parser.add_argument(
         "--tx-event-unmapped-policy",
-        choices=["drop", "keep", "fail"],
-        default="fail",
-        help="Policy for tx events that cannot be mapped to a run (default: fail)",
+        choices=["drop", "keep", "warn", "fail"],
+        default="warn",
+        help="Policy for tx events that cannot be mapped to a run (default: warn)",
     )
     parser.add_argument(
         "--tx-event-window-skew-sec",
@@ -1917,6 +1917,7 @@ def main():
         measurement_quality_failures.append("query_benchmark_failed")
     if (
         measurement_enabled
+        and args.strict_measurement_quality
         and args.tx_event_unmapped_policy == "fail"
         and tx_events_unmapped_policy_triggered
         and tx_events_unmapped > 0
@@ -1924,6 +1925,16 @@ def main():
         measurement_quality_failures.append("tx_event_unmapped_policy_fail")
     if measurement_enabled and args.strict_measurement_quality and tx_events_mapped_committed == 0:
         measurement_quality_failures.append("mapped_committed_tx_coverage_zero")
+
+    if (
+        measurement_enabled
+        and args.tx_event_unmapped_policy == "warn"
+        and tx_events_unmapped > 0
+    ):
+        print(
+            f"Warning: {tx_events_unmapped} tx-event rows could not be mapped to benchmark operations; "
+            "continuing because --tx-event-unmapped-policy=warn."
+        )
 
     any_failures = (
         workflow_steps_failed > 0

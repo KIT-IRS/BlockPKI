@@ -4,7 +4,7 @@ A Decentralized Blockchain-based Public Key Infrastructure built on top of Hyper
 
 ## Project Structure
 
-This repository is organized into four main components:
+This repository is organized into these main components:
 
 *   **[`/chaincode`](./chaincode)**
     Contains the Go-based Fabric smart contracts. It handles decentralized CA logic, member join requests, voting mechanics (approval limits), and key management on the ledger.
