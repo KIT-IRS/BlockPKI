@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "test-network",
   "version": "1.0.0",
   "client": {
@@ -21,26 +21,11 @@
   "channels": {
     "mychannel": {
       "peers": {
-        "peer0.irs2.kit.edu": {},
-        "peer0.irs3.kit.edu": {},
-        "peer0.irs4.kit.edu": {},
-        "peer0.irs5.kit.edu": {}
+        "peer0.irs3.kit.edu": {}
       }
     }
   },
   "organizations": {
-    "IRS2MSP": {
-      "mspid": "IRS2MSP",
-      "adminPrivateKey": {
-        "path": "/tmp/crypto/peerOrganizations/irs2.kit.edu/users/Member1@irs2.kit.edu/msp/keystore/priv_sk"
-      },
-      "signedCert": {
-        "path": "/tmp/crypto/peerOrganizations/irs2.kit.edu/users/Member1@irs2.kit.edu/msp/signcerts/Member1@irs2.kit.edu-cert.pem"
-      },
-      "peers": [
-        "peer0.irs2.kit.edu"
-      ]
-    },
     "IRS3MSP": {
       "mspid": "IRS3MSP",
       "adminPrivateKey": {
@@ -51,30 +36,6 @@
       },
       "peers": [
         "peer0.irs3.kit.edu"
-      ]
-    },
-    "IRS4MSP": {
-      "mspid": "IRS4MSP",
-      "adminPrivateKey": {
-        "path": "/tmp/crypto/peerOrganizations/irs4.kit.edu/users/Member1@irs4.kit.edu/msp/keystore/priv_sk"
-      },
-      "signedCert": {
-        "path": "/tmp/crypto/peerOrganizations/irs4.kit.edu/users/Member1@irs4.kit.edu/msp/signcerts/Member1@irs4.kit.edu-cert.pem"
-      },
-      "peers": [
-        "peer0.irs4.kit.edu"
-      ]
-    },
-    "IRS5MSP": {
-      "mspid": "IRS5MSP",
-      "adminPrivateKey": {
-        "path": "/tmp/crypto/peerOrganizations/irs5.kit.edu/users/Member1@irs5.kit.edu/msp/keystore/priv_sk"
-      },
-      "signedCert": {
-        "path": "/tmp/crypto/peerOrganizations/irs5.kit.edu/users/Member1@irs5.kit.edu/msp/signcerts/Member1@irs5.kit.edu-cert.pem"
-      },
-      "peers": [
-        "peer0.irs5.kit.edu"
       ]
     }
   },
@@ -90,15 +51,6 @@
     }
   },
   "peers": {
-    "peer0.irs2.kit.edu": {
-      "tlsCACerts": {
-        "path": "/tmp/crypto/peerOrganizations/irs2.kit.edu/peers/peer0.irs2.kit.edu/tls/ca.crt"
-      },
-      "url": "grpcs://192.168.1.162:7051",
-      "grpcOptions": {
-        "ssl-target-name-override": "peer0.irs2.kit.edu"
-      }
-    },
     "peer0.irs3.kit.edu": {
       "tlsCACerts": {
         "path": "/tmp/crypto/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/ca.crt"
@@ -106,24 +58,6 @@
       "url": "grpcs://192.168.1.163:7051",
       "grpcOptions": {
         "ssl-target-name-override": "peer0.irs3.kit.edu"
-      }
-    },
-    "peer0.irs4.kit.edu": {
-      "tlsCACerts": {
-        "path": "/tmp/crypto/peerOrganizations/irs4.kit.edu/peers/peer0.irs4.kit.edu/tls/ca.crt"
-      },
-      "url": "grpcs://192.168.1.164:7051",
-      "grpcOptions": {
-        "ssl-target-name-override": "peer0.irs4.kit.edu"
-      }
-    },
-    "peer0.irs5.kit.edu": {
-      "tlsCACerts": {
-        "path": "/tmp/crypto/peerOrganizations/irs5.kit.edu/peers/peer0.irs5.kit.edu/tls/ca.crt"
-      },
-      "url": "grpcs://192.168.1.165:7051",
-      "grpcOptions": {
-        "ssl-target-name-override": "peer0.irs5.kit.edu"
       }
     }
   }

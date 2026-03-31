@@ -1,5 +1,7 @@
 To run explorer you need to copy the respective crypto data from the generated instance:
 
+The exact workflow is described in  **[Deployment Instructions & Network Setup](./deployment/README.md)**
+
 cp -r ../test-network/organizations/ .
 
 To achieve:

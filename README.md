@@ -19,7 +19,7 @@ This repository is organized into these main components:
 
 ## Getting Started
 
-To spin up the network, install the components, and run the system, refer to the guide in the deployment folder:
+To start the network, install the components, and run the system, refer to the guide in the deployment folder:
  **[Deployment Instructions & Network Setup](./deployment/README.md)**
 
  To get information about the testing process and the measurement scripts and results themselves, refer to the guide in the benchmarking folder:

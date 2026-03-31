@@ -23,11 +23,11 @@ hosts:
 #    orderer: true             
 #    orgs: []     
 
-  #pi1:
-  #  ip: "192.168.1.161"       # change 
-  #  arch: arm64
-  #  orderer: false
-  #  orgs: [irs1]
+  pi1:
+    ip: "192.168.1.161"       # change 
+    arch: arm64
+    orderer: false
+    orgs: [irs1]
 
   pi2:
     ip: "192.168.1.162"       # change
@@ -54,18 +54,18 @@ hosts:
     orgs: [irs5]
 
 orgs:
-  #irs1:
-  #  mspid: IRS1MSP
-  #  domain: irs1.kit.edu
-  #  peer_port: 7051
-  #  chaincode_port: 7052
-  #  operations_port: 9444
-  #  peers: 1
-  #  member_users: 1       
-  #  observer_users: 1       
-  #  p2p_port: 6001
-  #  webui_port: 8081
-  #  join_mode: none           # member,request,none
+  irs1:
+    mspid: IRS1MSP
+    domain: irs1.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1       
+    observer_users: 1       
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none           # member,request,none
 
     ####  Overrides (optional)  ####
     # msp_user: Member1@irs1.kit.edu  # default identity for TSS peer

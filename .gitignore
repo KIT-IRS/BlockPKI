@@ -12,7 +12,6 @@
 !deployment/add-peer.sh
 !deployment/generate.sh
 !deployment/setup-host.sh
-!deployment/create-channel.sh
 !deployment/openssl-generate.sh
 !deployment/network-config.yaml
 !chaincode/

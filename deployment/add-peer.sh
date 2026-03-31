@@ -8,14 +8,17 @@
 #  3) Prints the exact channel-join command
 #
 # Usage:
-#   ./add-peer.sh --org org3 --peer-index 1
+#   ./add-peer.sh --org irs3 --peer-index 1
 #
 # Optional:
 #   --config /path/to/network-config.yaml
 #   --output /path/to/generated
-#   --host pi1
+#   --host pi3
+#   --client-user Member2@irs3.kit.edu
+#   --client-role member|observer|client
+#   --no-client-user
 #
-# NOTE: Requires openssl and yq. Uses existing cryptogen CA keys.
+# NOTE: Requires openssl and yq. Uses existing OpenSSL-generated org CA/TLS CA keys.
 # ----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -30,13 +33,14 @@ PEER_INDEX=""
 HOST=""
 CLIENT_USER=""
 CREATE_CLIENT_USER="true"
+CLIENT_ROLE="member"
 
 COUNTRY="DE"
 STATE="Baden-Wuerttemberg"
 LOCALITY="Karlsruhe"
 
 usage() {
-  echo "Usage: $0 --org org3 --peer-index 1 [--host pi1] [--config path] [--output path] [--client-user peer1@org3.example.com] [--no-client-user]"
+  echo "Usage: $0 --org irs3 --peer-index 1 [--host pi3] [--config path] [--output path] [--client-user Member2@irs3.kit.edu] [--client-role member|observer|client] [--no-client-user]"
   exit 1
 }
 
@@ -48,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --config) CONFIG="$2"; shift 2;;
     --output) OUTPUT="$2"; shift 2;;
     --client-user) CLIENT_USER="$2"; shift 2;;
+    --client-role) CLIENT_ROLE="$2"; shift 2;;
     --no-client-user) CREATE_CLIENT_USER="false"; shift 1;;
     *) usage;;
   esac
@@ -64,6 +69,23 @@ if [[ ! -f "$CONFIG" ]]; then
   echo "ERROR: config not found: $CONFIG"
   exit 1
 fi
+
+normalize_client_role() {
+  local role="$1"
+  role=$(echo "$role" | tr '[:upper:]' '[:lower:]' | tr -d '\r' | xargs)
+  echo "$role"
+}
+
+validate_client_role() {
+  local role="$1"
+  if [[ "$role" != "member" && "$role" != "observer" && "$role" != "client" ]]; then
+    echo "ERROR: invalid --client-role '$role' (expected member|observer|client)"
+    exit 1
+  fi
+}
+
+CLIENT_ROLE="$(normalize_client_role "$CLIENT_ROLE")"
+validate_client_role "$CLIENT_ROLE"
 
 if [[ -z "$HOST" ]]; then
   HOST=$(yq ".hosts | to_entries[] | select(.value.orgs[]==\"$ORG\") | .key" "$CONFIG")
@@ -162,10 +184,10 @@ openssl x509 -req -in "$TMP_DIR/peer_tls.csr" -CA "$TLSCA_CERT" -CAkey "$TLSCA_K
   -out "$TLS_DIR/server.crt" -days 3650 -sha256 -extfile "$TMP_DIR/tls_ext.cnf"
 cp "$TLSCA_CERT" "$TLS_DIR/ca.crt"
 
-# Optional client identity (OU=client) for TSS/CLI usage
+# Optional client identity for TSS/CLI usage (default role: member)
 if [[ "$CREATE_CLIENT_USER" == "true" ]]; then
   if [[ -z "$CLIENT_USER" ]]; then
-    CLIENT_USER="peer${PEER_INDEX}@${DOMAIN}"
+    CLIENT_USER="Member$((PEER_INDEX + 1))@${DOMAIN}"
   fi
   USER_DIR="$ORG_PATH/users/$CLIENT_USER"
   USER_MSP_DIR="$USER_DIR/msp"
@@ -178,7 +200,17 @@ if [[ "$CREATE_CLIENT_USER" == "true" ]]; then
 
   USER_KEY="$USER_MSP_DIR/keystore/priv_sk"
   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out "$USER_KEY"
-  USER_SUBJ="/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=client/CN=${CLIENT_USER}"
+  case "$CLIENT_ROLE" in
+    member)
+      USER_SUBJ="/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=member/OU=admin/CN=${CLIENT_USER}"
+      ;;
+    observer)
+      USER_SUBJ="/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=observer/OU=client/CN=${CLIENT_USER}"
+      ;;
+    client)
+      USER_SUBJ="/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=client/CN=${CLIENT_USER}"
+      ;;
+  esac
   openssl req -new -key "$USER_KEY" -subj "$USER_SUBJ" -out "$TMP_DIR/user_msp.csr"
   openssl x509 -req -in "$TMP_DIR/user_msp.csr" -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
     -out "$USER_MSP_DIR/signcerts/${CLIENT_USER}-cert.pem" -days 3650 -sha256
@@ -188,10 +220,15 @@ fi
 OVERRIDE="$HOST_DIR/peer${PEER_INDEX}-${ORG}-override.yaml"
 
 EXTRA_HOSTS_LINES=()
-ORDERER_HOST=$(yq ".hosts | to_entries[] | select(.value.orderer==true) | .key" "$CONFIG")
-ORDERER_IP=$(yq ".hosts.$ORDERER_HOST.ip" "$CONFIG")
+ORDERER_HOST_KEY=$(yq ".hosts | to_entries[] | select(.value.orderer==true) | .key" "$CONFIG")
+ORDERER_IP=$(yq ".hosts.$ORDERER_HOST_KEY.ip" "$CONFIG")
+ORDERER_FQDN=$(yq -r ".orderer.hostname" "$CONFIG")
+if [[ -z "$ORDERER_FQDN" || "$ORDERER_FQDN" == "null" ]]; then
+  echo "ERROR: orderer.hostname missing in config"
+  exit 1
+fi
 if [[ -n "$ORDERER_IP" && "$ORDERER_IP" != "$HOST_IP" ]]; then
-  EXTRA_HOSTS_LINES+=("      - \"orderer.example.com:${ORDERER_IP}\"")
+  EXTRA_HOSTS_LINES+=("      - \"${ORDERER_FQDN}:${ORDERER_IP}\"")
 fi
 for o in $(yq ".orgs | keys | .[]" "$CONFIG"); do
   o_domain=$(yq ".orgs.$o.domain" "$CONFIG")

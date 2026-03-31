@@ -27,6 +27,29 @@ COUNTRY="DE"
 STATE="Baden-Wuerttemberg"
 LOCALITY="Karlsruhe"
 
+normalize_role() {
+  local role="$1"
+  role=$(echo "$role" | tr '[:upper:]' '[:lower:]' | tr -d '\r' | xargs)
+  echo "$role"
+}
+
+validate_role() {
+  local role="$1"
+  if [[ "$role" != "member" && "$role" != "observer" ]]; then
+    echo "ERROR: invalid client role '$role' (expected member|observer)"
+    exit 1
+  fi
+}
+
+validate_nonneg_int() {
+  local value="$1"
+  local label="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: ${label} must be a non-negative integer (got '${value}')"
+    exit 1
+  fi
+}
+
 get_org_subject() {
   local org="$1"
   local key="$2"
@@ -124,8 +147,12 @@ make_tls_ext() {
 }
 
 # ------------------------ Orderer Org --------------------------------------
-ORDERER_DOMAIN=$(yq ".orderer.hostname" "$CONFIG" | awk -F. '{print $2"."$3}')
 ORDERER_HOST=$(yq ".orderer.hostname" "$CONFIG")
+ORDERER_DOMAIN="${ORDERER_HOST#*.}"
+if [[ -z "$ORDERER_DOMAIN" || "$ORDERER_DOMAIN" == "$ORDERER_HOST" ]]; then
+  echo "ERROR: orderer.hostname must include a domain (for example orderer.kit.edu)"
+  exit 1
+fi
 
 ORDERER_ORG="$ORG_OUT/ordererOrganizations/${ORDERER_DOMAIN}"
 mkdir -p "$ORDERER_ORG/ca" "$ORDERER_ORG/tlsca" "$ORDERER_ORG/msp/cacerts" "$ORDERER_ORG/msp/tlscacerts"
@@ -189,8 +216,35 @@ for org in $(yq ".orgs | keys | .[]" "$CONFIG"); do
   ORG_O="$(get_org_subject "$org" "o" "$DOMAIN")"
   ADMIN_CN="$(get_org_subject "$org" "admin_cn" "Admin@${DOMAIN}")"
   PEER_CN_TEMPLATE="$(get_org_subject "$org" "peer_cn_template" "peer{{index}}.${DOMAIN}")"
-  USER_COUNT=$(yq ".orgs.$org.users // 1" "$CONFIG")
-  USER_CN_TEMPLATE="$(get_org_subject "$org" "user_cn_template" "User{{index}}@${DOMAIN}")"
+  MEMBER_CN_TEMPLATE="$(get_org_subject "$org" "member_cn_template" "Member{{index}}@${DOMAIN}")"
+  OBSERVER_CN_TEMPLATE="$(get_org_subject "$org" "observer_cn_template" "Observer{{index}}@${DOMAIN}")"
+
+  MEMBER_COUNT_RAW=$(yq -r ".orgs.${org}.member_users // \"\"" "$CONFIG" | tr -d '\r')
+  OBSERVER_COUNT_RAW=$(yq -r ".orgs.${org}.observer_users // \"\"" "$CONFIG" | tr -d '\r')
+  LEGACY_USERS_RAW=$(yq -r ".orgs.${org}.users // \"\"" "$CONFIG" | tr -d '\r')
+
+  if [[ -n "$LEGACY_USERS_RAW" && "$LEGACY_USERS_RAW" != "null" ]] && \
+     ([[ -n "$MEMBER_COUNT_RAW" && "$MEMBER_COUNT_RAW" != "null" ]] || [[ -n "$OBSERVER_COUNT_RAW" && "$OBSERVER_COUNT_RAW" != "null" ]]); then
+    echo "ERROR: org ${org} mixes legacy users with member_users/observer_users"
+    exit 1
+  fi
+
+  if [[ -n "$LEGACY_USERS_RAW" && "$LEGACY_USERS_RAW" != "null" ]]; then
+    MEMBER_COUNT="$LEGACY_USERS_RAW"
+    OBSERVER_COUNT=0
+  else
+    MEMBER_COUNT="${MEMBER_COUNT_RAW:-1}"
+    OBSERVER_COUNT="${OBSERVER_COUNT_RAW:-1}"
+    if [[ "$MEMBER_COUNT" == "null" || -z "$MEMBER_COUNT" ]]; then
+      MEMBER_COUNT=1
+    fi
+    if [[ "$OBSERVER_COUNT" == "null" || -z "$OBSERVER_COUNT" ]]; then
+      OBSERVER_COUNT=1
+    fi
+  fi
+
+  validate_nonneg_int "$MEMBER_COUNT" "org ${org} member_users"
+  validate_nonneg_int "$OBSERVER_COUNT" "org ${org} observer_users"
 
   ORG_PATH="$ORG_OUT/peerOrganizations/${DOMAIN}"
   mkdir -p "$ORG_PATH/ca" "$ORG_PATH/tlsca" "$ORG_PATH/msp/cacerts" "$ORG_PATH/msp/tlscacerts"
@@ -219,11 +273,11 @@ for org in $(yq ".orgs | keys | .[]" "$CONFIG"); do
     "/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=admin/CN=${ADMIN_CN}" \
     ""
 
-  # Client users
-  if [[ "$USER_COUNT" != "null" && "$USER_COUNT" -gt 0 ]]; then
-    for ((u=1; u<=USER_COUNT; u++)); do
-      USER_NAME="User${u}@${DOMAIN}"
-      USER_CN="$(expand_peer_cn_template "$USER_CN_TEMPLATE" "$u" "$DOMAIN")"
+  # Member users (dual OU: member + admin)
+  if [[ "$MEMBER_COUNT" -gt 0 ]]; then
+    for ((u=1; u<=MEMBER_COUNT; u++)); do
+      USER_NAME="Member${u}@${DOMAIN}"
+      USER_CN="$(expand_peer_cn_template "$MEMBER_CN_TEMPLATE" "$u" "$DOMAIN")"
       USER_DIR="$ORG_PATH/users/${USER_NAME}/msp"
       mkdir -p "$USER_DIR/cacerts" "$USER_DIR/tlscacerts" "$USER_DIR/signcerts" "$USER_DIR/keystore"
       cp "$ORG_PATH/msp/cacerts/"* "$USER_DIR/cacerts/"
@@ -232,7 +286,27 @@ for org in $(yq ".orgs | keys | .[]" "$CONFIG"); do
       issue_cert "$CA_KEY" "$CA_CERT" \
         "$USER_DIR/keystore/priv_sk" \
         "$USER_DIR/signcerts/${USER_NAME}-cert.pem" \
-        "/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=client/CN=${USER_CN}" \
+        "/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=member/OU=admin/CN=${USER_CN}" \
+        ""
+    done
+  fi
+
+  # Observer users
+  # Includes OU=client so the peers ACL treats observers as valid client identities
+  # (required for query/invoke). Keep OU=observer so chaincode role checks can still
+  if [[ "$OBSERVER_COUNT" -gt 0 ]]; then
+    for ((u=1; u<=OBSERVER_COUNT; u++)); do
+      USER_NAME="Observer${u}@${DOMAIN}"
+      USER_CN="$(expand_peer_cn_template "$OBSERVER_CN_TEMPLATE" "$u" "$DOMAIN")"
+      USER_DIR="$ORG_PATH/users/${USER_NAME}/msp"
+      mkdir -p "$USER_DIR/cacerts" "$USER_DIR/tlscacerts" "$USER_DIR/signcerts" "$USER_DIR/keystore"
+      cp "$ORG_PATH/msp/cacerts/"* "$USER_DIR/cacerts/"
+      cp "$ORG_PATH/msp/tlscacerts/"* "$USER_DIR/tlscacerts/"
+      cp "$ORG_PATH/msp/config.yaml" "$USER_DIR/config.yaml"
+      issue_cert "$CA_KEY" "$CA_CERT" \
+        "$USER_DIR/keystore/priv_sk" \
+        "$USER_DIR/signcerts/${USER_NAME}-cert.pem" \
+        "/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=observer/OU=client/CN=${USER_CN}" \
         ""
     done
   fi

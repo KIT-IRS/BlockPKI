@@ -88,7 +88,7 @@ type Vote struct {
 	VoterID   string    `json:"voterId"`
 	Decision  string    `json:"decision"` // approve, reject
 	Timestamp time.Time `json:"timestamp"`
-	Rationale string    `json:"rationale,omitempty,optional"`
+	Rationale string    `json:"rationale,omitempty"`
 }
 
 type PartialSignature struct {
@@ -124,8 +124,8 @@ type Certificate struct {
 	RevocationReason string    `json:"revocationReason"`
 	ProposalID       string    `json:"proposalId"`
 	Epoch            int       `json:"epoch"`
-	SignatureR       string    `json:"signatureR,omitempty,optional"`
-	SignatureS       string    `json:"signatureS,omitempty,optional"`
+	SignatureR       string    `json:"signatureR,omitempty"`
+	SignatureS       string    `json:"signatureS,omitempty"`
 }
 
 // CertificateMerkleState stores the Merkle tree of active certificates
@@ -142,8 +142,8 @@ type CertificateMerkleState struct {
 // Whether the Merkle tree is updated
 type MerkleConfig struct {
 	Enabled   bool   `json:"enabled"`
-	UpdatedAt string `json:"updatedAt,omitempty,optional"`
-	UpdatedBy string `json:"updatedBy,omitempty,optional"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	UpdatedBy string `json:"updatedBy,omitempty"`
 }
 
 type RevocationProposal struct {
@@ -206,8 +206,8 @@ type ReshareSession struct {
 	NewCAPublicKey     string   `json:"newCaPublicKey"`
 	OldPartySalt       string   `json:"oldPartySalt"`
 	NewPartySalt       string   `json:"newPartySalt"`
-	SupersededBy       int      `json:"supersededBy,omitempty,optional"`
-	SupersededAt       string   `json:"supersededAt,omitempty,optional"`
+	SupersededBy       int      `json:"supersededBy,omitempty"`
+	SupersededAt       string   `json:"supersededAt,omitempty"`
 }
 
 type storageAttributionTracker struct {

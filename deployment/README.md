@@ -527,58 +527,36 @@ It uses the existing orgs MSP to issue new enrollment certs.
 ```bash
 cd /mnt/d/fabric/fabric-samples/deployment
 
-./add-peer.sh --org irs3 --peer-index 1
+./add-peer.sh --org irs3 --peer-index 1 --client-role member2
 
-# create a client identity using the org CA keys (same style as add-peer.sh)
-ORG=irs3
-CONFIG=network-config.yaml
-OUTPUT=generated
-DOMAIN=$(yq -r ".orgs.${ORG}.domain" "$CONFIG")
-ORG_PATH="$OUTPUT/organizations/peerOrganizations/$DOMAIN"
+cd /mnt/d/fabric/fabric-samples/deployment
 
-USER="peer1@${DOMAIN}"
-USER_DIR="$ORG_PATH/users/$USER"
+# peer crypto
+rsync -av generated/organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu \
+  ilo@192.168.1.163:/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/peers/
 
-CA_KEY=$(ls "$ORG_PATH/ca/"*sk | head -n1)
-CA_CERT=$(ls "$ORG_PATH/ca/"*.pem | head -n1)
+# user identity
+rsync -av "generated/organizations/peerOrganizations/irs3.kit.edu/users/Member2@irs3.kit.edu" \
+  ilo@192.168.1.163:/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/
 
-rm -rf "$USER_DIR/msp/{cacerts,tlscacerts,signcerts,keystore}"
-mkdir -p "$USER_DIR/msp"/{cacerts,tlscacerts,signcerts,keystore}
+# compose override
+rsync -av generated/hosts/pi3/peer1-irs3-override.yaml \
+  ilo@192.168.1.163:/opt/fabric/
 
-cp "$ORG_PATH/msp/cacerts/"* "$USER_DIR/msp/cacerts/" || true
-cp "$ORG_PATH/msp/tlscacerts/"* "$USER_DIR/msp/tlscacerts/" || true
-cp "$ORG_PATH/msp/config.yaml" "$USER_DIR/msp/config.yaml" || true
-
-ORG_C=$(yq -r ".orgs.${ORG}.subject.c // \"DE\"" "$CONFIG")
-ORG_ST=$(yq -r ".orgs.${ORG}.subject.st // \"Baden-Wuerttemberg\"" "$CONFIG")
-ORG_L=$(yq -r ".orgs.${ORG}.subject.l // \"Karlsruhe\"" "$CONFIG")
-ORG_O=$(yq -r ".orgs.${ORG}.subject.o // \"$DOMAIN\"" "$CONFIG")
-  ROLE=member   # or observer
-  SUBJ="/C=${ORG_C}/ST=${ORG_ST}/L=${ORG_L}/O=${ORG_O}/OU=${ROLE}/CN=${USER}"
-
-openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 \
-  -out "$USER_DIR/msp/keystore/priv_sk"
-openssl req -new -key "$USER_DIR/msp/keystore/priv_sk" -subj "$SUBJ" -out /tmp/${USER}.csr
-openssl x509 -req -in /tmp/${USER}.csr -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
-  -out "$USER_DIR/msp/signcerts/${USER}-cert.pem" -days 3650 -sha256
-
-rsync -av generated/organizations/peerOrganizations/irs3.kit.edu/users/peer1@irs3.kit.edu \
-  ilo@192.168.1.165:/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/
-rsync -av generated/hosts/pi1/peer1-irs3-override.yaml ilo@192.168.1.165:/opt/fabric/
 
 # run this on the pi to start the additional docker container
 cd /opt/fabric
 docker compose -f docker-compose.yaml -f peer1-irs3-override.yaml up -d peer1.irs3.kit.edu
 
 # run this on the pc
-cd /mnt/d/fabric/fabric-samples/deployment/generated/hosts/pc
+cd /mnt/d/fabric/fabric-samples/deployment/generated/hosts/pi1
 # join channel
 export FABRIC_CFG_PATH=$PWD/peercfg
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID=IRS3MSP
 export CORE_PEER_TLS_ROOTCERT_FILE=/mnt/d/fabric/fabric-samples/deployment/generated/organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/ca.crt
 export CORE_PEER_MSPCONFIGPATH=/mnt/d/fabric/fabric-samples/deployment/generated/organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp
-export CORE_PEER_ADDRESS=192.168.1.165:8051 #incremented by 1000 with each peer (initial orgs peer is 7051)
+export CORE_PEER_ADDRESS=192.168.1.163:8051 #incremented by 1000 with each peer (initial orgs peer is 7051)
 peer channel join -b channel-artifacts/mychannel.block
 
 # install chaincode
@@ -587,32 +565,34 @@ export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID=IRS3MSP
 export CORE_PEER_TLS_ROOTCERT_FILE=/mnt/d/fabric/fabric-samples/deployment/generated/organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/ca.crt
 export CORE_PEER_MSPCONFIGPATH=/mnt/d/fabric/fabric-samples/deployment/generated/organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp
-export CORE_PEER_ADDRESS=192.168.1.165:8051  #incremented by 1000 with each peer (initial orgs peer is 7051)
+export CORE_PEER_ADDRESS=192.168.1.163:8051  #incremented by 1000 with each peer (initial orgs peer is 7051)
 
 peer lifecycle chaincode install /mnt/d/fabric/fabric-samples/deployment/bpki_${CC_VERSION}.tar.gz
 peer lifecycle chaincode queryinstalled
 
-# check if user stuff exists
+# check if user exists
 ls /opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/
 
+# Start user, same as normal user but the crytopaths and adresses need to be changed
 cd /opt/fabric
 source tss-irs3.env
-export TSS_MSP_USER=peer1@irs3.kit.edu
+export TSS_MSP_USER=Member2@irs3.kit.edu
 export TSS_PEER_HOSTNAME=peer1.irs3.kit.edu
-export TSS_PEER_ENDPOINT=localhost:8051       # peer_port + 1000 (if base is 7051)
-export TSS_P2P_TLS_SERVER_CERT_PATH=./organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu/tls/server.crt
-export TSS_P2P_TLS_SERVER_KEY_PATH=./organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu/tls/server.key
-export TSS_P2P_TLS_CLIENT_CERT_PATH=./organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/signcerts/Member1@irs3.kit.edu-cert.pem
-export TSS_P2P_TLS_CLIENT_KEY_PATH=./organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/keystore/priv_sk
-export TSS_P2P_PORT=6004                      # for TSS messages, should be unique on the device
-export TSS_P2P_ADVERTISE=192.168.1.165:6004   # Actually advertised address that is registered to the ledger
-export TSS_WEBUI_PORT=8084                    # can be arbitrary if not used
-export TSS_STATE_DIR=state/irs3-peer1
-export TSS_JOIN_MODE=none
-./tss_peer irs3
+export TSS_PEER_ENDPOINT=localhost:8051
+export TSS_INTERACTIVE_MENU=true
+export TSS_P2P_TLS_SERVER_CERT_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu/tls/server.crt
+export TSS_P2P_TLS_SERVER_KEY_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu/tls/server.key
+export TSS_P2P_TLS_CLIENT_CERT_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/Member2@irs3.kit.edu/msp/signcerts/Member2@irs3.kit.edu-cert.pem
+export TSS_P2P_TLS_CLIENT_KEY_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/Member2@irs3.kit.edu/msp/keystore/priv_sk
 
+export TSS_P2P_PORT=6004
+export TSS_P2P_ADVERTISE=192.168.1.163:6004   # use THIS host’s IP
+export TSS_WEBUI_PORT=8084
+export TSS_STATE_DIR=state/irs3-peer1
+export TSS_JOIN_MODE=request
+./tss_peer irs3
 ```
-### Add a new org to an existing network (not actually tested)
+### Add a new org to an existing network (not tested)
 
 Adding an org requires a channel config update and new MSP crypto.
 Note: `generate.sh` regenerates all crypto, so run it in a temp copy of `deployment/` and copy only the new org folder into the live network.
@@ -664,12 +644,13 @@ peer chaincode invoke -C mychannel -n bpki \
 
 ### Explorer - Blockchain Dashboard
 
-Explorer is available on `localhost:8080`.
-Canonical profile path: `explorer/connection-profile/test-network.json`
-Compatibility mirror path (optional): `explorer/connection/test-network.json`
+Important: As of the end of this project, explorer was archived and is no longer actively maintained
+
+Explorer is available on `localhost:8080`. As default
+Canonical profile path: `explorer/connection/test-network.json`, May need to be changed on different configs
 
 ```bash
-cd /mnt/d/fabric/explorer
+cd /mnt/d/fabric/fabric-samples/explorer
 
 # Sync generated crypto into Explorer (IRS3 profile)
 cp -r /mnt/d/fabric/fabric-samples/deployment/generated/hosts/pi3/organizations .
@@ -680,7 +661,11 @@ ls organizations/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/s
 ls organizations/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/ca.crt
 
 # Start Explorer
-cd /mnt/d/fabric/explorer
+cd /mnt/d/fabric/fabric-samples/explorer
+
+# If explorer is running on a different machine, the networks need to be linked
+docker network create fabric_net || true
+
 docker-compose up -d
 
 # Credentials
