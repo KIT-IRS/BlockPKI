@@ -206,7 +206,9 @@ def safe_read_csv(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
     try:
-        return pd.read_csv(path)
+        # Parse in one pass so pandas does not infer dtypes per chunk and emit
+        # DtypeWarning for mixed-type columns (common in ID-like fields).
+        return pd.read_csv(path, low_memory=False)
     except Exception as exc:
         print(f"Warning: failed to read {path}: {exc}")
         return pd.DataFrame()
