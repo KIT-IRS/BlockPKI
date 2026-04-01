@@ -246,7 +246,7 @@ sudo ./setup-host.sh
 ```bash
 # On Pis
 cd /opt/fabric
-docker compose down -v --remove-orphans
+docker compose down -v --remove-orphans # May need additional clearance to remove all containers and volumes from previous runs not in compose file
 
 docker compose up -d
 ```
@@ -403,6 +403,9 @@ rm -f /opt/fabric/state/irs3/keyshare_*.gob
 ## Ideally wait for a node to start and be accepted into the CA with reshare until you start the next one
 # If the DKG is still running and you want to join a new node with join_mode=request, it will and can not send the join request to not protect the dkg from disruption
 
+# If you want to submit CSRs from a node you need a cl interface or a WebUi of this node. You can also start a node in cl mode, submit the csr manually, stop the process by ^C and restart it headless
+# The key share and state is then just reloaded, if you put a join_mode, it may run a reshare process to resync the key.
+
 # Blocking Terminal, basic node
 cd /opt/fabric
 source tss-irs1.env
@@ -522,14 +525,13 @@ Peers use an automatic port offset of +1000 from the initial one on all ports
 
 This adds peers to an existing org on a running network.
 It uses the existing orgs MSP to issue new enrollment certs.
+Be careful that no residual peer containers or volumes from previous runs are present, otherwise this will cause issues with crypto inconsistencies
 
 
 ```bash
 cd /mnt/d/fabric/fabric-samples/deployment
 
-./add-peer.sh --org irs3 --peer-index 1 --client-role member2
-
-cd /mnt/d/fabric/fabric-samples/deployment
+./add-peer.sh --org irs3 --peer-index 1 --client-role member
 
 # peer crypto
 rsync -av generated/organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu \
@@ -549,7 +551,7 @@ cd /opt/fabric
 docker compose -f docker-compose.yaml -f peer1-irs3-override.yaml up -d peer1.irs3.kit.edu
 
 # run this on the pc
-cd /mnt/d/fabric/fabric-samples/deployment/generated/hosts/pi1
+cd /mnt/d/fabric/fabric-samples/deployment/generated/hosts/pi3
 # join channel
 export FABRIC_CFG_PATH=$PWD/peercfg
 export CORE_PEER_TLS_ENABLED=true
@@ -591,6 +593,29 @@ export TSS_WEBUI_PORT=8084
 export TSS_STATE_DIR=state/irs3-peer1
 export TSS_JOIN_MODE=request
 ./tss_peer irs3
+
+cd /opt/fabric
+sudo mkdir -p /opt/fabric/logs /opt/fabric/run
+sudo chown -R ilo:ilo /opt/fabric/logs /opt/fabric/run
+chmod 775 /opt/fabric/logs /opt/fabric/run
+source tss-irs3.env
+export TSS_MSP_USER=Member2@irs3.kit.edu
+export TSS_PEER_HOSTNAME=peer1.irs3.kit.edu
+export TSS_PEER_ENDPOINT=localhost:8051
+export TSS_INTERACTIVE_MENU=true
+export TSS_P2P_TLS_SERVER_CERT_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu/tls/server.crt
+export TSS_P2P_TLS_SERVER_KEY_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/peers/peer1.irs3.kit.edu/tls/server.key
+export TSS_P2P_TLS_CLIENT_CERT_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/Member2@irs3.kit.edu/msp/signcerts/Member2@irs3.kit.edu-cert.pem
+export TSS_P2P_TLS_CLIENT_KEY_PATH=/opt/fabric/organizations/peerOrganizations/irs3.kit.edu/users/Member2@irs3.kit.edu/msp/keystore/priv_sk
+
+export TSS_P2P_PORT=6004
+export TSS_P2P_ADVERTISE=192.168.1.163:6004   # use THIS host’s IP
+export TSS_WEBUI_PORT=8084
+export TSS_STATE_DIR=state/irs3-peer1
+export TSS_JOIN_MODE=request
+nohup ./tss_peer irs3 > /opt/fabric/logs/tss-irs3-member2.log 2>&1 < /dev/null &
+echo $! > /opt/fabric/run/tss-irs3-member2.pid
+
 ```
 ### Add a new org to an existing network (not tested)
 
@@ -696,7 +721,7 @@ sudo mkdir -p "$OUT"
 sudo chown -R ilo:ilo "$OUT"
 sudo -E python3 /opt/fabric/benchmarks/run_benchmark_suite.py \
   --api http://127.0.0.1:8083 \
-  --runs 5 \
+  --runs 4 \
   --member-id 'x509::CN=Member1@irs3.kit.edu,OU=member+OU=admin,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE::CN=ca.irs3.kit.edu,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE' \
   --artifact-profile full \
   --query-cert-source auto_csr \
@@ -722,11 +747,6 @@ sudo -E python3 /opt/fabric/benchmarks/run_benchmark_suite.py \
   --peer-metrics-url http://localhost:9446/metrics \
   --peer-metrics-prefix gossip_ \
   --outroot "$OUT"
-
-# Note on quality gates:
-# - Defaults are now non-strict and use '--tx-event-unmapped-policy warn', which is better for shared long-running peers.
-# - For publication-grade isolated runs, enable strict mode explicitly:
-#     --strict-measurement-quality --tx-event-unmapped-policy fail
 
 
 # Analyse the run (generates plots)
