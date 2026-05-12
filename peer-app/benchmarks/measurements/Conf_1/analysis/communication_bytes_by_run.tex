@@ -1,0 +1,90 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={fill opacity=0.8, draw opacity=1, text opacity=1, draw=lightgray204},
+tick align=outside,
+tick pos=left,
+title={Network Bytes by Run (control-adjusted)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Total RX+TX bytes per operation},
+ymajorgrids,
+ymin=0, ymax=5997613.35,
+ytick style={color=darkslategray51},
+ytick={0,1000000,2000000,3000000,4000000,5000000,6000000},
+yticklabels={0 B,1.0 MB,2.0 MB,3.0 MB,4.0 MB,5.0 MB,6.0 MB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 2757062
+2 2515611
+3 2720618
+4 2538792
+5 2707262
+6 2589201
+7 2527297
+8 2405540
+9 2679843
+10 2632853
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 4865037
+2 5210027
+3 5067523
+4 5368546
+5 5294688
+6 5648036
+7 5237870
+8 4926845
+9 5753732
+10 5197407
+};
+\addlegendentry{join}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 3107243
+2 2945396
+3 3076766
+4 3124691
+5 3165714
+6 3200719
+7 3220400
+8 3194350
+9 3016983
+10 3171184
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 1046018
+2 1015106
+3 1025051
+4 911024
+5 1036592
+6 1056603
+7 876105
+8 963470
+9 1309730
+10 904598
+};
+\addlegendentry{revocation}
+\end{axis}
+
+\end{tikzpicture}

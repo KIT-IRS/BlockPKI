@@ -1,0 +1,465 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{groupplot}[group style={group size=3 by 1}]
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={tss CPU},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Percent of host total CPU},
+ymajorgrids,
+ymin=-0.6785, ymax=18.2085,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 10.5275
+1.225 10.5275
+1.225 11.345
+0.775 11.345
+0.775 10.5275
+};
+\addplot [black]
+table {%
+1 10.5275
+1 10.32
+};
+\addplot [black]
+table {%
+1 11.345
+1 11.62
+};
+\addplot [black]
+table {%
+0.8875 10.32
+1.1125 10.32
+};
+\addplot [black]
+table {%
+0.8875 11.62
+1.1125 11.62
+};
+\addplot [black]
+table {%
+1.775 15.9175
+2.225 15.9175
+2.225 17.0075
+1.775 17.0075
+1.775 15.9175
+};
+\addplot [black]
+table {%
+2 15.9175
+2 15.33
+};
+\addplot [black]
+table {%
+2 17.0075
+2 17.35
+};
+\addplot [black]
+table {%
+1.8875 15.33
+2.1125 15.33
+};
+\addplot [black]
+table {%
+1.8875 17.35
+2.1125 17.35
+};
+\addplot [black]
+table {%
+2.775 0.19
+3.225 0.19
+3.225 0.2525
+2.775 0.2525
+2.775 0.19
+};
+\addplot [black]
+table {%
+3 0.19
+3 0.18
+};
+\addplot [black]
+table {%
+3 0.2525
+3 0.26
+};
+\addplot [black]
+table {%
+2.8875 0.18
+3.1125 0.18
+};
+\addplot [black]
+table {%
+2.8875 0.26
+3.1125 0.26
+};
+\addplot [black]
+table {%
+3.775 0.33
+4.225 0.33
+4.225 0.345
+3.775 0.345
+3.775 0.33
+};
+\addplot [black]
+table {%
+4 0.33
+4 0.33
+};
+\addplot [black]
+table {%
+4 0.345
+4 0.35
+};
+\addplot [black]
+table {%
+3.8875 0.33
+4.1125 0.33
+};
+\addplot [black]
+table {%
+3.8875 0.35
+4.1125 0.35
+};
+\addplot [steelblue70100170]
+table {%
+0.775 11.24
+1.225 11.24
+};
+\addplot [steelblue70100170]
+table {%
+1.775 16.115
+2.225 16.115
+};
+\addplot [steelblue70100170]
+table {%
+2.775 0.21
+3.225 0.21
+};
+\addplot [steelblue70100170]
+table {%
+3.775 0.33
+4.225 0.33
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={peer CPU},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=2.5985, ymax=3.9515,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 3.515
+1.225 3.515
+1.225 3.74
+0.775 3.74
+0.775 3.515
+};
+\addplot [black]
+table {%
+1 3.515
+1 3.28
+};
+\addplot [black]
+table {%
+1 3.74
+1 3.89
+};
+\addplot [black]
+table {%
+0.8875 3.28
+1.1125 3.28
+};
+\addplot [black]
+table {%
+0.8875 3.89
+1.1125 3.89
+};
+\addplot [black]
+table {%
+1.775 2.9825
+2.225 2.9825
+2.225 3.05
+1.775 3.05
+1.775 2.9825
+};
+\addplot [black]
+table {%
+2 2.9825
+2 2.93
+};
+\addplot [black]
+table {%
+2 3.05
+2 3.09
+};
+\addplot [black]
+table {%
+1.8875 2.93
+2.1125 2.93
+};
+\addplot [black]
+table {%
+1.8875 3.09
+2.1125 3.09
+};
+\addplot [black]
+table {%
+2.775 2.6825
+3.225 2.6825
+3.225 2.7575
+2.775 2.7575
+2.775 2.6825
+};
+\addplot [black]
+table {%
+3 2.6825
+3 2.66
+};
+\addplot [black]
+table {%
+3 2.7575
+3 2.79
+};
+\addplot [black]
+table {%
+2.8875 2.66
+3.1125 2.66
+};
+\addplot [black]
+table {%
+2.8875 2.79
+3.1125 2.79
+};
+\addplot [black]
+table {%
+3.775 3.3975
+4.225 3.3975
+4.225 3.54
+3.775 3.54
+3.775 3.3975
+};
+\addplot [black]
+table {%
+4 3.3975
+4 3.21
+};
+\addplot [black]
+table {%
+4 3.54
+4 3.66
+};
+\addplot [black]
+table {%
+3.8875 3.21
+4.1125 3.21
+};
+\addplot [black]
+table {%
+3.8875 3.66
+4.1125 3.66
+};
+\addplot [steelblue70100170]
+table {%
+0.775 3.57
+1.225 3.57
+};
+\addplot [steelblue70100170]
+table {%
+1.775 3.04
+2.225 3.04
+};
+\addplot [steelblue70100170]
+table {%
+2.775 2.725
+3.225 2.725
+};
+\addplot [steelblue70100170]
+table {%
+3.775 3.42
+4.225 3.42
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={orderer CPU},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=0.372, ymax=0.548,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 0.4525
+1.225 0.4525
+1.225 0.4775
+0.775 0.4775
+0.775 0.4525
+};
+\addplot [black]
+table {%
+1 0.4525
+1 0.43
+};
+\addplot [black]
+table {%
+1 0.4775
+1 0.51
+};
+\addplot [black]
+table {%
+0.8875 0.43
+1.1125 0.43
+};
+\addplot [black]
+table {%
+0.8875 0.51
+1.1125 0.51
+};
+\addplot [black]
+table {%
+1.775 0.4
+2.225 0.4
+2.225 0.41
+1.775 0.41
+1.775 0.4
+};
+\addplot [black]
+table {%
+2 0.4
+2 0.39
+};
+\addplot [black]
+table {%
+2 0.41
+2 0.42
+};
+\addplot [black]
+table {%
+1.8875 0.39
+2.1125 0.39
+};
+\addplot [black]
+table {%
+1.8875 0.42
+2.1125 0.42
+};
+\addplot [black]
+table {%
+2.775 0.39
+3.225 0.39
+3.225 0.4
+2.775 0.4
+2.775 0.39
+};
+\addplot [black]
+table {%
+3 0.39
+3 0.38
+};
+\addplot [black]
+table {%
+3 0.4
+3 0.41
+};
+\addplot [black]
+table {%
+2.8875 0.38
+3.1125 0.38
+};
+\addplot [black]
+table {%
+2.8875 0.41
+3.1125 0.41
+};
+\addplot [black]
+table {%
+3.775 0.4675
+4.225 0.4675
+4.225 0.505
+3.775 0.505
+3.775 0.4675
+};
+\addplot [black]
+table {%
+4 0.4675
+4 0.44
+};
+\addplot [black]
+table {%
+4 0.505
+4 0.54
+};
+\addplot [black]
+table {%
+3.8875 0.44
+4.1125 0.44
+};
+\addplot [black]
+table {%
+3.8875 0.54
+4.1125 0.54
+};
+\addplot [steelblue70100170]
+table {%
+0.775 0.465
+1.225 0.465
+};
+\addplot [steelblue70100170]
+table {%
+1.775 0.405
+2.225 0.405
+};
+\addplot [steelblue70100170]
+table {%
+2.775 0.395
+3.225 0.395
+};
+\addplot [steelblue70100170]
+table {%
+3.775 0.49
+4.225 0.49
+};
+\end{groupplot}
+
+\draw ({$(current bounding box.south west)!0.5!(current bounding box.south east)$}|-{$(current bounding box.south west)!0.98!(current bounding box.north west)$}) node[
+  scale=0.6,
+  anchor=north,
+  text=black,
+  rotate=0.0
+]{Component CPU Distribution by Workflow};
+\end{tikzpicture}

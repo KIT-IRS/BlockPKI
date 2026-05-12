@@ -1,0 +1,192 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Query Latency Distribution},
+x grid style={lightgray204},
+xmin=0.5, xmax=5.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4,5},
+xticklabels={status_ms,merkle_root_ms,merkle_proof_ms,proof_verify_ms,end_to_end_ms},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Latency (ms)},
+ymajorgrids,
+ymin=-2.79089115, ymax=58.97945815,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.75 12.1347025
+1.25 12.1347025
+1.25 13.08057825
+0.75 13.08057825
+0.75 12.1347025
+};
+\addplot [black]
+table {%
+1 12.1347025
+1 10.997552
+};
+\addplot [black]
+table {%
+1 13.08057825
+1 14.498983
+};
+\addplot [black]
+table {%
+0.875 10.997552
+1.125 10.997552
+};
+\addplot [black]
+table {%
+0.875 14.498983
+1.125 14.498983
+};
+\addplot [black]
+table {%
+1.75 21.06680725
+2.25 21.06680725
+2.25 22.98460375
+1.75 22.98460375
+1.75 21.06680725
+};
+\addplot [black]
+table {%
+2 21.06680725
+2 18.564739
+};
+\addplot [black]
+table {%
+2 22.98460375
+2 25.849669
+};
+\addplot [black]
+table {%
+1.875 18.564739
+2.125 18.564739
+};
+\addplot [black]
+table {%
+1.875 25.849669
+2.125 25.849669
+};
+\addplot [black]
+table {%
+2.75 11.96397225
+3.25 11.96397225
+3.25 13.0568565
+2.75 13.0568565
+2.75 11.96397225
+};
+\addplot [black]
+table {%
+3 11.96397225
+3 10.9887
+};
+\addplot [black]
+table {%
+3 13.0568565
+3 14.531796
+};
+\addplot [black]
+table {%
+2.875 10.9887
+3.125 10.9887
+};
+\addplot [black]
+table {%
+2.875 14.531796
+3.125 14.531796
+};
+\addplot [black]
+table {%
+3.75 0.01983375
+4.25 0.01983375
+4.25 0.02275475
+3.75 0.02275475
+3.75 0.01983375
+};
+\addplot [black]
+table {%
+4 0.01983375
+4 0.016852
+};
+\addplot [black]
+table {%
+4 0.02275475
+4 0.026685
+};
+\addplot [black]
+table {%
+3.875 0.016852
+4.125 0.016852
+};
+\addplot [black]
+table {%
+3.875 0.026685
+4.125 0.026685
+};
+\addplot [black]
+table {%
+4.75 45.94708775
+5.25 45.94708775
+5.25 50.56821925
+4.75 50.56821925
+4.75 45.94708775
+};
+\addplot [black]
+table {%
+5 45.94708775
+5 42.625477
+};
+\addplot [black]
+table {%
+5 50.56821925
+5 56.171715
+};
+\addplot [black]
+table {%
+4.875 42.625477
+5.125 42.625477
+};
+\addplot [black]
+table {%
+4.875 56.171715
+5.125 56.171715
+};
+\addplot [steelblue70100170]
+table {%
+0.75 12.546471
+1.25 12.546471
+};
+\addplot [steelblue70100170]
+table {%
+1.75 21.7199055
+2.25 21.7199055
+};
+\addplot [steelblue70100170]
+table {%
+2.75 12.3762535
+3.25 12.3762535
+};
+\addplot [steelblue70100170]
+table {%
+3.75 0.021055
+4.25 0.021055
+};
+\addplot [steelblue70100170]
+table {%
+4.75 47.100113
+5.25 47.100113
+};
+\end{axis}
+
+\end{tikzpicture}

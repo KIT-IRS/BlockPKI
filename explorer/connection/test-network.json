@@ -1,0 +1,64 @@
+{
+  "name": "test-network",
+  "version": "1.0.0",
+  "client": {
+    "tlsEnable": true,
+    "adminCredential": {
+      "id": "exploreradmin",
+      "password": "exploreradminpw"
+    },
+    "enableAuthentication": true,
+    "organization": "IRS3MSP",
+    "connection": {
+      "timeout": {
+        "peer": {
+          "endorser": "300"
+        },
+        "orderer": "300"
+      }
+    }
+  },
+  "channels": {
+    "mychannel": {
+      "peers": {
+        "peer0.irs3.kit.edu": {}
+      }
+    }
+  },
+  "organizations": {
+    "IRS3MSP": {
+      "mspid": "IRS3MSP",
+      "adminPrivateKey": {
+        "path": "/tmp/crypto/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/keystore/priv_sk"
+      },
+      "signedCert": {
+        "path": "/tmp/crypto/peerOrganizations/irs3.kit.edu/users/Member1@irs3.kit.edu/msp/signcerts/Member1@irs3.kit.edu-cert.pem"
+      },
+      "peers": [
+        "peer0.irs3.kit.edu"
+      ]
+    }
+  },
+  "orderers": {
+    "orderer.kit.edu": {
+      "url": "grpcs://192.168.1.163:7050",
+      "tlsCACerts": {
+        "path": "/tmp/crypto/ordererOrganizations/kit.edu/orderers/orderer.kit.edu/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "orderer.kit.edu"
+      }
+    }
+  },
+  "peers": {
+    "peer0.irs3.kit.edu": {
+      "tlsCACerts": {
+        "path": "/tmp/crypto/peerOrganizations/irs3.kit.edu/peers/peer0.irs3.kit.edu/tls/ca.crt"
+      },
+      "url": "grpcs://192.168.1.163:7051",
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.irs3.kit.edu"
+      }
+    }
+  }
+}

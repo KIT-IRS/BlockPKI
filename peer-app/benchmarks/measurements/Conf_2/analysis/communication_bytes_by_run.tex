@@ -1,0 +1,90 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={fill opacity=0.8, draw opacity=1, text opacity=1, draw=lightgray204},
+tick align=outside,
+tick pos=left,
+title={Network Bytes by Run (control-adjusted)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Total RX+TX bytes per operation},
+ymajorgrids,
+ymin=0, ymax=5651965.4,
+ytick style={color=darkslategray51},
+ytick={0,1000000,2000000,3000000,4000000,5000000,6000000},
+yticklabels={0 B,1.0 MB,2.0 MB,3.0 MB,4.0 MB,5.0 MB,6.0 MB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 2213755
+2 2183963
+3 2339457
+4 2303326
+5 2207215
+6 2247103
+7 2056544
+8 2285785
+9 2373914
+10 2292287
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 5090182
+2 5062807
+3 5136188
+4 5003607
+5 5037287
+6 5048270
+7 4804620
+8 5408079
+9 4853094
+10 5136092
+};
+\addlegendentry{join}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 2558586
+2 2387910
+3 2430545
+4 2347797
+5 2432213
+6 2212273
+7 2438961
+8 2276882
+9 2340811
+10 2633470
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 664245
+2 667478
+3 666702
+4 616312
+5 619809
+6 642301
+7 612320
+8 639820
+9 530351
+10 670357
+};
+\addlegendentry{revocation}
+\end{axis}
+
+\end{tikzpicture}

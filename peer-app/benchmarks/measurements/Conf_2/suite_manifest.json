@@ -1,0 +1,348 @@
+{
+  "started_at": "2026-03-09T07:10:41.781620Z",
+  "ended_at": "2026-03-09T07:46:02.991679Z",
+  "config": {
+    "api": "http://127.0.0.1:8083",
+    "runs_requested": 10,
+    "runs_executed": 10,
+    "workflows": [
+      "csr",
+      "revocation",
+      "removal",
+      "join"
+    ],
+    "member_id": "x509::CN=Member1@irs3.kit.edu,OU=member+OU=admin,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE::CN=ca.irs3.kit.edu,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE",
+    "inter_workflow_sleep": 15.0,
+    "continue_on_error": true,
+    "artifact_profile": "full",
+    "metrics": [
+      "/opt/fabric/state/irs3/metrics.jsonl"
+    ],
+    "run_workflows_pass_through": {
+      "reason": "benchmark",
+      "timeout": 600,
+      "poll": 2.0,
+      "no_wait": false,
+      "cn": "",
+      "o": "",
+      "l": "",
+      "st": "",
+      "c": "",
+      "measure": true,
+      "collect_resources": false,
+      "collect_messages": true,
+      "phase_tags": true,
+      "peer_metrics_url": [
+        "http://localhost:9446/metrics"
+      ],
+      "peer_metrics_prefix": [
+        "gossip_"
+      ],
+      "storage_path": [
+        "/var/lib/docker/volumes"
+      ],
+      "storage_component": [
+        "peer=peer0\\.irs3\\.kit\\.edu",
+        "orderer=orderer\\.kit\\.edu"
+      ],
+      "storage_slices": true,
+      "storage_topk": 5,
+      "resources_interval": 1.0,
+      "resources_iface": "eth0",
+      "no_resources_control_subtract": false,
+      "resources_control_exclude_port": [
+        22,
+        8083,
+        9446
+      ],
+      "measurement_v2": true,
+      "operation_id": "",
+      "artifact_profile": "full",
+      "query_bench": true,
+      "query_iters": 30,
+      "query_warmup": 5,
+      "query_timeout": 10.0,
+      "query_cert_source": "auto_csr",
+      "query_cert_id": "",
+      "strict_measurement_quality": true,
+      "tx_event_unmapped_policy": "fail",
+      "tx_event_window_skew_sec": 120,
+      "gossip_convergence_timeout": 30.0,
+      "gossip_convergence_poll": 1.0
+    }
+  },
+  "storage_measurement": {
+    "storage_source_mode": "explicit",
+    "resolved_storage_paths": [
+      "/var/lib/docker/volumes"
+    ],
+    "storage_component_rules_effective": [
+      {
+        "label": "peer",
+        "regex": "peer0\\.irs3\\.kit\\.edu"
+      },
+      {
+        "label": "orderer",
+        "regex": "orderer\\.kit\\.edu"
+      }
+    ],
+    "storage_slices_enabled": true,
+    "storage_topk": 5,
+    "per_run_coverage": {
+      "run_001": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_002": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_003": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_004": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_005": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_006": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_007": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_008": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_009": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      },
+      "run_010": {
+        "storage_rows": 4,
+        "paths_recorded": [
+          "/var/lib/docker/volumes"
+        ],
+        "rows_per_path": {
+          "/var/lib/docker/volumes": 4
+        },
+        "component_split_populated": true,
+        "storage_stage_rows": {
+          "storage_stage_deltas": 21,
+          "storage_stage_volume_deltas": 210,
+          "storage_stage_topk_volumes": 105,
+          "storage_stage_peer_ledger_deltas": 21
+        }
+      }
+    }
+  },
+  "workflow_steps": {
+    "succeeded": 40,
+    "failed": 0,
+    "total": 40
+  },
+  "labeling_steps": {
+    "succeeded": 10,
+    "failed": 0,
+    "total": 10
+  },
+  "any_failures": true,
+  "measurement_v2": {
+    "enabled": true,
+    "event_primary": true,
+    "fallback_mode": "poll_fallback",
+    "workflow_runs_v2_rows": 40,
+    "tx_event_rows": 737,
+    "tx_block_size_rows": 190,
+    "tx_events_total": 39942,
+    "tx_events_mapped": 737,
+    "tx_events_unmapped": 39205,
+    "tx_events_mapped_committed": 81,
+    "tx_events_mapping_mode": "run_operation_id_primary_with_timestamp_fallback",
+    "tx_event_unmapped_policy": "fail"
+  },
+  "communication_measurement": {
+    "enabled": true,
+    "suite_message_rows": 40
+  },
+  "query_benchmark": {
+    "enabled": true,
+    "query_cert_source": "auto_csr",
+    "requested_cert_id": "",
+    "fallback_member_id": "x509::CN=Member1@irs3.kit.edu,OU=member+OU=admin,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE::CN=ca.irs3.kit.edu,O=irs3.kit.edu,L=Karlsruhe,ST=Baden-Wuerttemberg,C=DE",
+    "iterations_per_run": 30,
+    "warmup_per_run": 5,
+    "timeout_s": 10.0,
+    "strict_measurement_quality": true,
+    "steps": {
+      "succeeded": 10,
+      "failed": 0,
+      "skipped": 0,
+      "total": 10
+    },
+    "suite_query_iteration_rows": 300,
+    "suite_query_summary_rows": 50
+  },
+  "measurement_quality": {
+    "strict": true,
+    "failures": [
+      "tx_event_unmapped_policy_fail"
+    ],
+    "ok": false
+  },
+  "artifact_retention": {
+    "profile": "full",
+    "files_removed": 0,
+    "bytes_freed": 0,
+    "run_dirs_removed": 0
+  },
+  "run_manifests": [
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_001/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_002/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_003/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_004/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_005/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_006/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_007/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_008/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_009/manifest.json",
+    "/opt/fabric/benchmarks/out/suite_20260309_081039/run_010/manifest.json"
+  ],
+  "aggregate_outputs": {
+    "suite_resources_summary_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_resources_summary_all_runs.csv",
+    "suite_resources_summary_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_resources_summary_averages.csv",
+    "suite_storage_deltas_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_deltas_all_runs.csv",
+    "suite_storage_deltas_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_deltas_averages.csv",
+    "suite_storage_stage_deltas_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_stage_deltas_all_runs.csv",
+    "suite_storage_stage_deltas_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_stage_deltas_averages.csv",
+    "suite_storage_stage_volume_deltas_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_stage_volume_deltas_all_runs.csv",
+    "suite_storage_stage_topk_volumes_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_stage_topk_volumes_all_runs.csv",
+    "suite_storage_stage_peer_ledger_deltas_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_storage_stage_peer_ledger_deltas_all_runs.csv",
+    "suite_phase_summary_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_phase_summary_all_runs.csv",
+    "suite_phase_summary_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_phase_summary_averages.csv",
+    "suite_resources_labeled_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_resources_labeled_all_runs.csv",
+    "suite_workflow_runs_v2_all": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_workflow_runs_v2_all.csv",
+    "suite_workflow_latency_v2_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_workflow_latency_v2_averages.csv",
+    "suite_message_counts_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_message_counts_all_runs.csv",
+    "suite_message_counts_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_message_counts_averages.csv",
+    "suite_tx_events_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_tx_events_all_runs.csv",
+    "suite_tx_block_sizes_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_tx_block_sizes_all_runs.csv",
+    "suite_query_bench_all_runs": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_query_bench_all_runs.csv",
+    "suite_query_bench_averages": "/opt/fabric/benchmarks/out/suite_20260309_081039/suite_query_bench_averages.csv"
+  }
+}

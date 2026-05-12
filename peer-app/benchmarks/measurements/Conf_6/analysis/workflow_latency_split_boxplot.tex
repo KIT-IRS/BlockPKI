@@ -1,0 +1,317 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{groupplot}[group style={group size=2 by 1}]
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={blockchain},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,revocation,removal,join},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Seconds},
+ymajorgrids,
+ymin=0, ymax=25.6197013,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 21.384426
+1.225 21.384426
+1.225 23.8089705
+0.775 23.8089705
+0.775 21.384426
+};
+\addplot [black]
+table {%
+1 21.384426
+1 20.728648
+};
+\addplot [black]
+table {%
+1 23.8089705
+1 25.150522
+};
+\addplot [black]
+table {%
+0.8875 20.728648
+1.1125 20.728648
+};
+\addplot [black]
+table {%
+0.8875 25.150522
+1.1125 25.150522
+};
+\addplot [black]
+table {%
+1.775 22.928874
+2.225 22.928874
+2.225 24.48454225
+1.775 24.48454225
+1.775 22.928874
+};
+\addplot [black]
+table {%
+2 22.928874
+2 20.934606
+};
+\addplot [black]
+table {%
+2 24.48454225
+2 24.979234
+};
+\addplot [black]
+table {%
+1.8875 20.934606
+2.1125 20.934606
+};
+\addplot [black]
+table {%
+1.8875 24.979234
+2.1125 24.979234
+};
+\addplot [black]
+table {%
+2.775 21.250427
+3.225 21.250427
+3.225 22.9590045
+2.775 22.9590045
+2.775 21.250427
+};
+\addplot [black]
+table {%
+3 21.250427
+3 20.822159
+};
+\addplot [black]
+table {%
+3 22.9590045
+3 24.507057
+};
+\addplot [black]
+table {%
+2.8875 20.822159
+3.1125 20.822159
+};
+\addplot [black]
+table {%
+2.8875 24.507057
+3.1125 24.507057
+};
+\addplot [black]
+table {%
+3.775 23.49898
+4.225 23.49898
+4.225 25.1951325
+3.775 25.1951325
+3.775 23.49898
+};
+\addplot [black]
+table {%
+4 23.49898
+4 21.278846
+};
+\addplot [black]
+table {%
+4 25.1951325
+4 25.386794
+};
+\addplot [black]
+table {%
+3.8875 21.278846
+4.1125 21.278846
+};
+\addplot [black]
+table {%
+3.8875 25.386794
+4.1125 25.386794
+};
+\addplot [steelblue70100170]
+table {%
+0.775 22.1500565
+1.225 22.1500565
+};
+\addplot [steelblue70100170]
+table {%
+1.775 22.987321
+2.225 22.987321
+};
+\addplot [steelblue70100170]
+table {%
+2.775 21.900394
+3.225 21.900394
+};
+\addplot [steelblue70100170]
+table {%
+3.775 24.428171
+4.225 24.428171
+};
+
+\nextgroupplot[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={tss coordination},
+unbounded coords=jump,
+x grid style={lightgray204},
+xlabel=\textcolor{black}{workflow},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,revocation,removal,join},
+y grid style={lightgray204},
+ymajorgrids,
+ymin=0, ymax=345.58824785,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 90.42363325
+1.225 90.42363325
+1.225 93.05329275
+0.775 93.05329275
+0.775 90.42363325
+};
+\addplot [black]
+table {%
+1 90.42363325
+1 90.387158
+};
+\addplot [black]
+table {%
+1 93.05329275
+1 95.012106
+};
+\addplot [black]
+table {%
+0.8875 90.387158
+1.1125 90.387158
+};
+\addplot [black]
+table {%
+0.8875 95.012106
+1.1125 95.012106
+};
+\addplot [black]
+table {%
+1.775 nan
+2.225 nan
+2.225 nan
+1.775 nan
+1.775 nan
+};
+\addplot [black]
+table {%
+2 nan
+2 nan
+};
+\addplot [black]
+table {%
+2 nan
+2 nan
+};
+\addplot [black]
+table {%
+1.8875 nan
+2.1125 nan
+};
+\addplot [black]
+table {%
+1.8875 nan
+2.1125 nan
+};
+\addplot [black]
+table {%
+2.775 297.7848015
+3.225 297.7848015
+3.225 309.34362
+2.775 309.34362
+2.775 297.7848015
+};
+\addplot [black]
+table {%
+3 297.7848015
+3 281.894986
+};
+\addplot [black]
+table {%
+3 309.34362
+3 309.555211
+};
+\addplot [black]
+table {%
+2.8875 281.894986
+3.1125 281.894986
+};
+\addplot [black]
+table {%
+2.8875 309.555211
+3.1125 309.555211
+};
+\addplot [black]
+table {%
+3.775 299.785186
+4.225 299.785186
+4.225 320.039993
+3.775 320.039993
+3.775 299.785186
+};
+\addplot [black]
+table {%
+4 299.785186
+4 289.110056
+};
+\addplot [black]
+table {%
+4 320.039993
+4 333.435815
+};
+\addplot [black]
+table {%
+3.8875 289.110056
+4.1125 289.110056
+};
+\addplot [black]
+table {%
+3.8875 333.435815
+4.1125 333.435815
+};
+\addplot [steelblue70100170]
+table {%
+0.775 91.032779
+1.225 91.032779
+};
+\addplot [steelblue70100170]
+table {%
+1.775 nan
+2.225 nan
+};
+\addplot [steelblue70100170]
+table {%
+2.775 304.834699
+3.225 304.834699
+};
+\addplot [steelblue70100170]
+table {%
+3.775 307.3449505
+4.225 307.3449505
+};
+\end{groupplot}
+
+\draw ({$(current bounding box.south west)!0.5!(current bounding box.south east)$}|-{$(current bounding box.south west)!0.98!(current bounding box.north west)$}) node[
+  scale=0.6,
+  anchor=north,
+  text=black,
+  rotate=0.0
+]{Latency Split Distribution by Workflow (Mixed Isolated)};
+\end{tikzpicture}

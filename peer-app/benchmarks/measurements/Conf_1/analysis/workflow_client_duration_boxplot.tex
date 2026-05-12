@@ -1,0 +1,239 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Workflow Duration Distribution (V2)},
+x grid style={lightgray204},
+xmin=0.5, xmax=4.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4},
+xticklabels={csr,revocation,removal,join},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Client Duration (s)},
+ymajorgrids,
+ymin=0, ymax=49.35209455,
+ytick style={color=darkslategray51}
+]
+\addplot [black]
+table {%
+0.775 18.97538275
+1.225 18.97538275
+1.225 19.0924475
+0.775 19.0924475
+0.775 18.97538275
+};
+\addplot [black]
+table {%
+1 18.97538275
+1 18.972064
+};
+\addplot [black]
+table {%
+1 19.0924475
+1 19.133174
+};
+\addplot [black]
+table {%
+0.8875 18.972064
+1.1125 18.972064
+};
+\addplot [black]
+table {%
+0.8875 19.133174
+1.1125 19.133174
+};
+\addplot [black]
+table {%
+1.775 8.756696
+2.225 8.756696
+2.225 8.813456
+1.775 8.813456
+1.775 8.756696
+};
+\addplot [black]
+table {%
+2 8.756696
+2 8.724643
+};
+\addplot [black]
+table {%
+2 8.813456
+2 8.828168
+};
+\addplot [black]
+table {%
+1.8875 8.724643
+2.1125 8.724643
+};
+\addplot [black]
+table {%
+1.8875 8.828168
+2.1125 8.828168
+};
+\addplot [black]
+table {%
+2.775 31.165006
+3.225 31.165006
+3.225 31.19212
+2.775 31.19212
+2.775 31.165006
+};
+\addplot [black]
+table {%
+3 31.165006
+3 31.135639
+};
+\addplot [black]
+table {%
+3 31.19212
+3 31.202676
+};
+\addplot [black]
+table {%
+2.8875 31.135639
+3.1125 31.135639
+};
+\addplot [black]
+table {%
+2.8875 31.202676
+3.1125 31.202676
+};
+\addplot [black]
+table {%
+3.775 39.78904875
+4.225 39.78904875
+4.225 42.810621
+3.775 42.810621
+3.775 39.78904875
+};
+\addplot [black]
+table {%
+4 39.78904875
+4 39.273993
+};
+\addplot [black]
+table {%
+4 42.810621
+4 45.326512
+};
+\addplot [black]
+table {%
+3.8875 39.273993
+4.1125 39.273993
+};
+\addplot [black]
+table {%
+3.8875 45.326512
+4.1125 45.326512
+};
+\addplot [steelblue70100170]
+table {%
+0.775 18.997728
+1.225 18.997728
+};
+\addplot [steelblue70100170]
+table {%
+1.775 8.769998
+2.225 8.769998
+};
+\addplot [steelblue70100170]
+table {%
+2.775 31.1734465
+3.225 31.1734465
+};
+\addplot [steelblue70100170]
+table {%
+3.775 41.310103
+4.225 41.310103
+};
+\addplot [draw=steelblue70100170, fill=steelblue70100170, mark=*, only marks, opacity=0.7]
+table{%
+x  y
+1.03947564441909 19.114038
+1.01141050631794 18.972064
+0.93432131069318 18.998084
+1.00530758409197 17.075418
+1.01941408024004 19.133174
+1.01036767502389 19.027676
+1.09367709630742 18.985339
+0.965493857204055 17.019735
+0.903262195722314 21.098324
+1.05060083706753 18.997372
+};
+\draw (axis cs:1,21.298324) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{n=10};
+\addplot [draw=steelblue70100170, fill=steelblue70100170, mark=*, only marks, opacity=0.7]
+table{%
+x  y
+2.00267451235351 8.753682
+1.98557429306151 8.766736
+2.03272108027903 8.726401
+1.93631397382263 8.828168
+1.95533182849743 8.724643
+2.08205621203313 8.77326
+1.96387344473558 8.765738
+1.97203918240538 8.781848
+2.01533754020064 10.763826
+2.00627913226451 8.823992
+};
+\draw (axis cs:2,10.963826) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{n=10};
+\addplot [draw=steelblue70100170, fill=steelblue70100170, mark=*, only marks, opacity=0.7]
+table{%
+x  y
+3.07870092854594 31.171685
+2.9166790527529 31.164899
+2.97088282497156 31.165327
+3.00611413223795 31.175208
+2.99968099927232 31.163906
+2.99701962672458 31.202676
+3.04786916637112 31.186591
+3.05053301237623 31.201606
+2.95603150381989 31.135639
+2.97786712352334 31.193963
+};
+\draw (axis cs:3,31.402676) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{n=10};
+\addplot [draw=steelblue70100170, fill=steelblue70100170, mark=*, only marks, opacity=0.7]
+table{%
+x  y
+4.04005010457686 39.319543
+3.90885282876898 45.326512
+4.03271468760367 39.273993
+3.95280664747948 41.332113
+3.94603929361072 41.197566
+4.03223094759297 47.417454
+3.99241217622454 41.33454
+3.97551635367393 39.287935
+4.02834861027524 43.302648
+4.03443364414223 41.288093
+};
+\draw (axis cs:4,47.617454) node[
+  scale=0.45,
+  anchor=south,
+  text=black,
+  rotate=0.0
+]{n=10};
+\end{axis}
+
+\end{tikzpicture}

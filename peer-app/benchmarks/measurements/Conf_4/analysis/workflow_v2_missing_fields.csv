@@ -1,0 +1,5 @@
+workflow_base,rows,submit_tx_id_missing,submit_tx_id_missing_pct,execute_tx_id_missing,execute_tx_id_missing_pct,submitted_observed_ts_missing,submitted_observed_ts_missing_pct,voted_ts_missing,voted_ts_missing_pct,approved_or_executed_ts_missing,approved_or_executed_ts_missing_pct,reshare_started_ts_missing,reshare_started_ts_missing_pct,reshare_completed_ts_missing,reshare_completed_ts_missing_pct,cert_registered_ts_missing,cert_registered_ts_missing_pct
+csr,10,0,0.0,0,0.0,0,0.0,0,0.0,0,0.0,10,100.0,10,100.0,0,0.0
+join,10,0,0.0,10,100.0,0,0.0,0,0.0,0,0.0,0,0.0,0,0.0,10,100.0
+removal,10,0,0.0,0,0.0,0,0.0,0,0.0,0,0.0,10,100.0,0,0.0,10,100.0
+revocation,10,0,0.0,0,0.0,0,0.0,0,0.0,0,0.0,10,100.0,10,100.0,10,100.0

@@ -1,0 +1,9 @@
+workflow_base,component,count,mean,min,max,sum
+csr,orderer_volume,10,86505.9,74184.0,89633.0,865059.0
+csr,peer_volume,10,106948.4,94478.0,110177.0,1069484.0
+join,orderer_volume,10,148292.2,136368.0,167491.0,1482922.0
+join,peer_volume,10,176264.2,164044.0,198199.0,1762642.0
+removal,orderer_volume,10,94993.3,84037.0,102705.0,949933.0
+removal,peer_volume,10,112767.6,101605.0,120647.0,1127676.0
+revocation,orderer_volume,10,46758.6,42696.0,49456.0,467586.0
+revocation,peer_volume,10,55656.8,51488.0,58433.0,556568.0

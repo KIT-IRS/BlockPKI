@@ -1,0 +1,5 @@
+workflow_base,path,count,mean,min,max,sum
+csr,/var/lib/docker/volumes,10,478408.4,400854,496836,4784084
+join,/var/lib/docker/volumes,10,947250.8,879212,1045587,9472508
+removal,/var/lib/docker/volumes,10,706517.0,630107,761756,7065170
+revocation,/var/lib/docker/volumes,10,195147.8,185358,199344,1951478

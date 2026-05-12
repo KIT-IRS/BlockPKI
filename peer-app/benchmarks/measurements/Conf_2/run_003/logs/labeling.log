@@ -1,0 +1,8 @@
+$ /usr/bin/python3 /opt/fabric/benchmarks/label_resources.py --resources /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/raw/resources_csr_1773040667.csv /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/raw/resources_join_1773040814.csv /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/raw/resources_removal_1773040744.csv /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/raw/resources_revocation_1773040715.csv --metrics /opt/fabric/state/irs3/metrics.jsonl --mode auto --outdir /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled --merged-out /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_all_labeled.csv --merged-phase-summary-out /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_all_phase_summary.csv
+
+Labeled resource file: /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_csr_1773040667_labeled.csv
+Labeled resource file: /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_join_1773040814_labeled.csv
+Labeled resource file: /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_removal_1773040744_labeled.csv
+Labeled resource file: /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_revocation_1773040715_labeled.csv
+Merged labeled file: /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_all_labeled.csv
+Merged phase summary written: /opt/fabric/benchmarks/out/suite_20260309_081039/run_003/labeled/resources_all_phase_summary.csv

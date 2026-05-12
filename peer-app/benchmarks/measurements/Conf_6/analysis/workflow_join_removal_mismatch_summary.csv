@@ -1,0 +1,7 @@
+workflow_base,reason,rows
+join,tag_operation_id_suffix_mismatch,2
+join,mixed_transition_present,1
+removal,missing_reshare_started_ts,10
+removal,tag_operation_id_suffix_mismatch,1
+revocation,tag_operation_id_suffix_mismatch,4
+revocation,mixed_transition_present,2

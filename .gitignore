@@ -1,0 +1,44 @@
+﻿*
+!.gitignore
+!peer-app/
+!peer-app/benchmarks/
+!peer-app/benchmarks/**
+!peer-app/cmd/
+!peer-app/cmd/tss_peer/
+!peer-app/cmd/tss_peer/**
+!peer-app/go.mod
+!peer-app/go.sum
+!deployment/
+!deployment/add-peer.sh
+!deployment/generate.sh
+!deployment/setup-host.sh
+!deployment/openssl-generate.sh
+!deployment/network-config.yaml
+!chaincode/
+!chaincode/decentralized_pki.go
+!chaincode/go.mod
+!chaincode/go.sum
+!README.md
+
+# Explorer (track config only)
+!explorer/
+!explorer/config.json
+!explorer/docker-compose.yaml
+!explorer/connection/
+!explorer/connection/test-network.json
+explorer/organizations/
+explorer/organizations_backup_*/
+
+# Chaincode docs
+!chaincode/CALL_MAP.md
+
+# Documentation assets
+!documentation/
+!documentation/**
+
+# Benchmark runtime artifacts
+peer-app/benchmarks/measurements/
+peer-app/benchmarks/old/
+peer-app/cmd/cert_client/
+explorer/connection-profile/
+peer-app/benchmarks/.gitignore

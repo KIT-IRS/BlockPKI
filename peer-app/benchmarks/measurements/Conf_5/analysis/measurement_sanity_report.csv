@@ -1,0 +1,32 @@
+check_name,workflow_base,metric,value,numerator,denominator,details
+stage_sum_vs_client_residual,csr,mean_signed_residual_s,1.4210854715202005e-15,,,client_duration_s - sum(stage_latency_s)
+stage_sum_vs_client_residual,csr,mean_abs_residual_s,1.4210854715202005e-15,,,abs(client_duration_s - sum(stage_latency_s))
+stage_sum_vs_client_residual,csr,p95_abs_residual_s,7.815970093361087e-15,,,95th percentile absolute residual
+stage_sum_vs_client_residual,join,mean_signed_residual_s,0.0,,,client_duration_s - sum(stage_latency_s)
+stage_sum_vs_client_residual,join,mean_abs_residual_s,5.684341886080802e-15,,,abs(client_duration_s - sum(stage_latency_s))
+stage_sum_vs_client_residual,join,p95_abs_residual_s,2.842170943040401e-14,,,95th percentile absolute residual
+stage_sum_vs_client_residual,removal,mean_signed_residual_s,2.842170943040401e-15,,,client_duration_s - sum(stage_latency_s)
+stage_sum_vs_client_residual,removal,mean_abs_residual_s,8.526512829121202e-15,,,abs(client_duration_s - sum(stage_latency_s))
+stage_sum_vs_client_residual,removal,p95_abs_residual_s,2.842170943040401e-14,,,95th percentile absolute residual
+stage_sum_vs_client_residual,revocation,mean_signed_residual_s,-3.552713678800501e-16,,,client_duration_s - sum(stage_latency_s)
+stage_sum_vs_client_residual,revocation,mean_abs_residual_s,3.552713678800501e-16,,,abs(client_duration_s - sum(stage_latency_s))
+stage_sum_vs_client_residual,revocation,p95_abs_residual_s,1.9539925233402717e-15,,,95th percentile absolute residual
+retry_inflation,csr,retry_inflation_rows,87.0,113.0,26.0,"max(tx_submit_started - tx_committed, 0)"
+retry_inflation,csr,retry_inflation_ratio,3.3461538461538463,87.0,26.0,retry_inflation_rows / tx_committed
+retry_inflation,join,retry_inflation_rows,0.0,10.0,10.0,"max(tx_submit_started - tx_committed, 0)"
+retry_inflation,join,retry_inflation_ratio,0.0,0.0,10.0,retry_inflation_rows / tx_committed
+retry_inflation,removal,retry_inflation_rows,49.0,62.0,13.0,"max(tx_submit_started - tx_committed, 0)"
+retry_inflation,removal,retry_inflation_ratio,3.769230769230769,49.0,13.0,retry_inflation_rows / tx_committed
+retry_inflation,reshare,retry_inflation_rows,0.0,0.0,0.0,"max(tx_submit_started - tx_committed, 0)"
+retry_inflation,reshare,retry_inflation_ratio,,0.0,0.0,retry_inflation_rows / tx_committed
+retry_inflation,revocation,retry_inflation_rows,36.0,51.0,15.0,"max(tx_submit_started - tx_committed, 0)"
+retry_inflation,revocation,retry_inflation_ratio,2.4,36.0,15.0,retry_inflation_rows / tx_committed
+logical_row_expansion,csr,row_expansion_ratio,2.3,69.0,30.0,rows / unique join_key (values >1 imply category expansion)
+logical_row_expansion,join,row_expansion_ratio,1.3333333333333333,40.0,30.0,rows / unique join_key (values >1 imply category expansion)
+logical_row_expansion,removal,row_expansion_ratio,1.3333333333333333,40.0,30.0,rows / unique join_key (values >1 imply category expansion)
+logical_row_expansion,revocation,row_expansion_ratio,1.6666666666666667,50.0,30.0,rows / unique join_key (values >1 imply category expansion)
+tx_block_mapping_coverage,csr,coverage_ratio,0.9615384615384616,25.0,26.0,unique committed tx_id present in suite_tx_block_sizes_all_runs.csv
+tx_block_mapping_coverage,join,coverage_ratio,1.0,10.0,10.0,unique committed tx_id present in suite_tx_block_sizes_all_runs.csv
+tx_block_mapping_coverage,removal,coverage_ratio,1.0,13.0,13.0,unique committed tx_id present in suite_tx_block_sizes_all_runs.csv
+tx_block_mapping_coverage,reshare,coverage_ratio,,0.0,0.0,unique committed tx_id present in suite_tx_block_sizes_all_runs.csv
+tx_block_mapping_coverage,revocation,coverage_ratio,1.0,15.0,15.0,unique committed tx_id present in suite_tx_block_sizes_all_runs.csv

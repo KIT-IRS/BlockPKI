@@ -1,0 +1,5 @@
+workflow_base,rows,rows_with_mixed_ge_eps,mixed_transition_s_raw_mean,mixed_transition_s_raw_max,mixed_transition_s_mean,overlap_correction_s_mean,decomposition_gap_s_mean
+csr,10,0,3.552713678800501e-16,3.552713678800501e-15,0.0,0.0,-7.105427357601002e-16
+join,10,0,0.0,0.0,0.0,0.0,-3.552713678800501e-15
+removal,10,0,7.105427357601002e-16,7.105427357601002e-15,0.0,0.0,-7.105427357601002e-16
+revocation,10,0,0.0,0.0,0.0,0.0,-3.552713678800501e-16

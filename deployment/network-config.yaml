@@ -1,0 +1,159 @@
+# ============================================================================
+#  Multi-Host Fabric + TSS Network Configuration
+# ============================================================================
+#
+# This file defines the ENTIRE network topology. All scripts and compose files
+# are generated from this source of truth.
+#
+# After editing, run:  ./generate.sh
+# Then deploy with:    ./deploy.sh
+#
+# Notes:
+# - Org keys use irsN naming (irs1, irs2, ...)
+# - Peer container names stay peer0, peer1, ...
+# - Domains use *.kit.edu (for example peer0.irs1.kit.edu)
+# ============================================================================
+
+
+hosts:
+
+#  pc:
+#    ip: "192.168.1.180"       # change 
+#    arch: amd64               # amd64 or arm64 
+#    orderer: true             
+#    orgs: []     
+
+  pi1:
+    ip: "192.168.1.161"       # change 
+    arch: arm64
+    orderer: false
+    orgs: [irs1]
+
+  pi2:
+    ip: "192.168.1.162"       # change
+    arch: arm64
+    orderer: false
+    orgs: [irs2]
+
+  pi3:
+    ip: "192.168.1.163"       # change 
+    arch: arm64
+    orderer: true
+    orgs: [irs3]
+
+  pi4:
+    ip: "192.168.1.164"       # change 
+    arch: arm64
+    orderer: false
+    orgs: [irs4]
+
+  pi5:
+    ip: "192.168.1.165"       # change 
+    arch: arm64
+    orderer: false
+    orgs: [irs5]
+
+orgs:
+  irs1:
+    mspid: IRS1MSP
+    domain: irs1.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1       
+    observer_users: 1       
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none           # member,request,none
+
+    ####  Overrides (optional)  ####
+    # msp_user: Member1@irs1.kit.edu  # default identity for TSS peer
+    # Optional per-user OU role overrides (OpenSSL only)
+    # client_roles:
+    #   Member1@irs1.kit.edu: member
+    #   Observer1@irs1.kit.edu: observer
+    # Optional per-org TSS nodes (multiple on same host)
+    # tss_nodes:
+    #   - name: a
+    #     join_mode: member
+    #     p2p_port: 6001
+    #     webui_port: 8081
+    #     state_dir: state/irs1/a
+    #     msp_user: Member1@irs1.kit.edu
+    # Optional subject overrides for OpenSSL crypto generation
+    # subject:
+    #   c: DE
+    #   st: Baden-Wuerttemberg
+    #   l: Karlsruhe
+    #   o: IRS-1
+    #   admin_cn: Admin@irs1.kit.edu
+    #   peer_cn_template: "peer{{index}}.irs1.kit.edu"
+
+  irs2:
+    mspid: IRS2MSP
+    domain: irs2.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
+
+  irs3:
+    mspid: IRS3MSP
+    domain: irs3.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
+
+  irs4:
+    mspid: IRS4MSP
+    domain: irs4.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
+
+  irs5:
+    mspid: IRS5MSP
+    domain: irs5.kit.edu
+    peer_port: 7051
+    chaincode_port: 7052
+    operations_port: 9444
+    peers: 1
+    member_users: 1
+    observer_users: 1
+    p2p_port: 6001
+    webui_port: 8081
+    join_mode: none
+
+orderer:
+  hostname: orderer.kit.edu
+  port: 7050
+  admin_port: 7053
+  operations_port: 9443
+  type: etcdraft
+
+channel:
+  name: mychannel
+  chaincode_name: bpki
+  chaincode_path: ../chaincode
+  chaincode_lang: golang
+
+features:
+  merkle_tree: true

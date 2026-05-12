@@ -1,0 +1,97 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.5,0.09)},
+  anchor=south,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Network Bytes by Run (control-adjusted)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Total RX+TX bytes per operation},
+ymajorgrids,
+ymin=0, ymax=15415470.35,
+ytick style={color=darkslategray51},
+ytick={0,2000000,4000000,6000000,8000000,10000000,12000000,14000000,16000000},
+yticklabels={0 B,2.0 MB,4.0 MB,6.0 MB,8.0 MB,10.0 MB,12.0 MB,14.0 MB,16.0 MB}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 9183367
+2 8100096
+3 8400270
+4 7916821
+5 8174459
+6 9100136
+7 8383166
+8 8288187
+9 8457540
+10 8416685
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 14299526
+2 14574209
+3 14455907
+4 14414100
+5 13980323
+6 14017105
+7 14281017
+8 14797523
+9 14798958
+10 14259873
+};
+\addlegendentry{join}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 10236944
+2 10344752
+3 10296340
+4 10387905
+5 10243653
+6 10588109
+7 10543374
+8 9983911
+9 10355895
+10 10806503
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 2643356
+2 2622918
+3 3039905
+4 3227241
+5 3670629
+6 2662782
+7 3202607
+8 2468711
+9 3178213
+10 2599151
+};
+\addlegendentry{revocation}
+\end{axis}
+
+\end{tikzpicture}

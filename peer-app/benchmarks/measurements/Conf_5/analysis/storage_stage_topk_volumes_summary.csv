@@ -1,0 +1,9 @@
+volume_name,component,count,mean,max,sum
+fabric_orderer.kit.edu,orderer,210,599877.1238095238,65672080,125974196
+fabric_peer3.irs3.kit.edu,other,160,419758.1125,2480368,67161298
+fabric_peer2.irs3.kit.edu,other,160,419757.99375,2480368,67161279
+fabric_peer1.irs3.kit.edu,other,160,419757.95,2480368,67161272
+fabric_peer0.irs3.kit.edu,peer,210,319815.5380952381,2480368,67161263
+ab96d922f06ec7a94f1b5200e75e480c9ed7eba86fbbe33b5cb9edbe031c6ea8,other,50,0.0,0,0
+dd820bcbe44cd4769bb920ed05fcdf7e3f815b7e26184126f86a8c3782d6ae37,other,50,0.0,0,0
+fabric_peer0.irs1.kit.edu,other,50,0.0,0,0

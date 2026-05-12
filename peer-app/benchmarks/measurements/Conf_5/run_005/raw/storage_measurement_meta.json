@@ -1,0 +1,29 @@
+{
+  "ts": "2026-03-08T17:35:41.276439Z",
+  "storage_source_mode": "explicit",
+  "resolved_storage_paths": [
+    "/var/lib/docker/volumes"
+  ],
+  "resolved_docker_root": "",
+  "artifact_profile": "full",
+  "storage_slices_enabled": true,
+  "storage_topk": 5,
+  "storage_stage_outputs": {
+    "storage_stage_deltas": "/opt/fabric/benchmarks/out/suite_20260308_175102/run_005/raw/storage_stage_deltas.csv",
+    "storage_stage_volume_deltas": "/opt/fabric/benchmarks/out/suite_20260308_175102/run_005/raw/storage_stage_volume_deltas.csv",
+    "storage_stage_topk_volumes": "/opt/fabric/benchmarks/out/suite_20260308_175102/run_005/raw/storage_stage_topk_volumes.csv",
+    "storage_stage_peer_ledger_deltas": "/opt/fabric/benchmarks/out/suite_20260308_175102/run_005/raw/storage_stage_peer_ledger_deltas.csv"
+  },
+  "storage_component_rules_effective": [
+    {
+      "label": "peer",
+      "regex": "peer0\\.irs3\\.kit\\.edu"
+    },
+    {
+      "label": "orderer",
+      "regex": "orderer\\.kit\\.edu"
+    }
+  ],
+  "non_splittable_paths": [],
+  "warnings": []
+}

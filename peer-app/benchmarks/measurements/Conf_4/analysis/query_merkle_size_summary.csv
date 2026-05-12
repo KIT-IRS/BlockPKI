@@ -1,0 +1,6 @@
+metric,count,mean,std,p50,p95,p99,min,max
+merkle_tree_size,0,,,,,,,
+merkle_root_payload_bytes,300,1640.0,0.0,1640.0,1640.0,1640.0,1640.0,1640.0
+merkle_proof_payload_bytes,300,673.0,0.0,673.0,673.0,673.0,673.0,673.0
+merkle_proof_only_bytes,300,473.0,0.0,473.0,473.0,473.0,473.0,473.0
+proof_nodes,300,5.0,0.0,5.0,5.0,5.0,5.0,5.0

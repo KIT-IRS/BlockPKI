@@ -1,0 +1,5 @@
+workflow_base,rows,success_rows,failed_rows,retries_total_sum,retries_mvcc_sum,retries_non_mvcc_sum,retries_total_mean,retries_mvcc_mean,retries_non_mvcc_mean,operations_with_mvcc_retry,operations_with_mvcc_retry_pct,retries_mvcc_per_success,retries_total_per_success
+csr,10,10,0,0,0,0,0.0,0.0,0.0,0,0.0,0.0,0.0
+join,10,10,0,0,0,0,0.0,0.0,0.0,0,0.0,0.0,0.0
+removal,10,10,0,0,0,0,0.0,0.0,0.0,0,0.0,0.0,0.0
+revocation,10,10,0,0,0,0,0.0,0.0,0.0,0,0.0,0.0,0.0

@@ -1,0 +1,95 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.09,0.5)},
+  anchor=west,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Workflow Duration by Run (V2)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Client Duration (s)},
+ymajorgrids,
+ymin=0, ymax=65.8655729,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 24.878372
+2 24.75353
+3 26.818556
+4 24.78691
+5 24.883198
+6 24.934899
+7 24.838962
+8 26.89277
+9 26.897026
+10 26.903266
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 10.519613
+2 10.526759
+3 10.548376
+4 10.547799
+5 10.527848
+6 10.560041
+7 10.567063
+8 10.553286
+9 10.535658
+10 10.575106
+};
+\addlegendentry{revocation}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 53.114709
+2 49.098427
+3 51.098263
+4 49.093142
+5 49.153068
+6 49.101727
+7 49.113106
+8 49.077823
+9 49.095835
+10 51.145429
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 59.210499
+2 59.182888
+3 59.198622
+4 55.104907
+5 55.346509
+6 55.198322
+7 55.157185
+8 63.230051
+9 61.315444
+10 61.29917
+};
+\addlegendentry{join}
+\end{axis}
+
+\end{tikzpicture}

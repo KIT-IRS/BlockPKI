@@ -1,0 +1,46 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={fill opacity=0.8, draw opacity=1, text opacity=1, draw=lightgray204},
+tick align=outside,
+tick pos=left,
+title={Average Storage Delta by Workflow and Component (/var/lib/docker/volumes Only)},
+x grid style={lightgray204},
+xmin=-0.59, xmax=3.59,
+xtick style={color=darkslategray51},
+xtick={0,1,2,3},
+xticklabels={csr,join,removal,revocation},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Avg Delta Bytes},
+ymajorgrids,
+ymin=0, ymax=29918456.295,
+ytick style={color=darkslategray51},
+ytick={0,5000000,10000000,15000000,20000000,25000000,30000000},
+yticklabels={0 B,5.0 MB,10.0 MB,15.0 MB,20.0 MB,25.0 MB,30.0 MB}
+]
+\draw[draw=none,fill=darkcyan0150130] (axis cs:-0.4,0) rectangle (axis cs:0.4,1838515);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkcyan0150130}
+\addlegendentry{orderer_volume}
+
+\draw[draw=none,fill=darkcyan0150130] (axis cs:0.6,0) rectangle (axis cs:1.4,20636200.3);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:1.6,0) rectangle (axis cs:2.4,768440.4);
+\draw[draw=none,fill=darkcyan0150130] (axis cs:2.6,0) rectangle (axis cs:3.4,683376.7);
+\draw[draw=none,fill=steelblue70100170] (axis cs:-0.4,1838515) rectangle (axis cs:0.4,3314743);
+\addlegendimage{ybar,ybar legend,draw=none,fill=steelblue70100170}
+\addlegendentry{peer_volume}
+
+\draw[draw=none,fill=steelblue70100170] (axis cs:0.6,20636200.3) rectangle (axis cs:1.4,28493767.9);
+\draw[draw=none,fill=steelblue70100170] (axis cs:1.6,768440.4) rectangle (axis cs:2.4,8619586.3);
+\draw[draw=none,fill=steelblue70100170] (axis cs:2.6,683376.7) rectangle (axis cs:3.4,1408527.9);
+\end{axis}
+
+\end{tikzpicture}

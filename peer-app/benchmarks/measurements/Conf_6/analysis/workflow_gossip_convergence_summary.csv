@@ -1,0 +1,5 @@
+workflow_base,rows,converged_rows,convergence_s_mean,convergence_s_p95,height_delta_mean,peers_observed_mean,peers_converged_mean
+csr,10,0,,,,0.0,0.0
+join,10,0,,,,0.0,0.0
+removal,10,0,,,,0.0,0.0
+revocation,10,0,,,,0.0,0.0

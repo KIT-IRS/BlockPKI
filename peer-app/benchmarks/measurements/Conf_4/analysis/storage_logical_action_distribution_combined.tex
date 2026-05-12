@@ -1,0 +1,439 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+tick align=outside,
+tick pos=left,
+title={Logical State Write Distribution by Workflow|Action},
+x grid style={lightgray204},
+xmin=0.5, xmax=12.5,
+xtick style={color=darkslategray51},
+xtick={1,2,3,4,5,6,7,8,9,10,11,12},
+xticklabel style={rotate=35.0},
+xticklabels={
+  csr|csr_submitted,
+  csr|csr_voted,
+  csr|certificate_registered,
+  revocation|revocation_proposed,
+  revocation|revocation_voted,
+  revocation|certificate_revoked,
+  removal|member_removal_proposed,
+  removal|member_removal_voted,
+  removal|member_removed,
+  join|member_join_requested,
+  join|member_join_voted,
+  join|member_join_approved
+},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Logical write bytes},
+ymajorgrids,
+ymin=0, ymax=12373.4,
+ytick style={color=darkslategray51},
+ytick={0,2000,4000,6000,8000,10000,12000,14000},
+yticklabels={0 B,2.0 KB,4.0 KB,6.0 KB,8.0 KB,10.0 KB,12.0 KB,14.0 KB}
+]
+\addplot [black]
+table {%
+0.75 3426
+1.25 3426
+1.25 3426
+0.75 3426
+0.75 3426
+};
+\addplot [black]
+table {%
+1 3426
+1 3426
+};
+\addplot [black]
+table {%
+1 3426
+1 3426
+};
+\addplot [black]
+table {%
+0.875 3426
+1.125 3426
+};
+\addplot [black]
+table {%
+0.875 3426
+1.125 3426
+};
+\addplot [black]
+table {%
+1.75 9080.5
+2.25 9080.5
+2.25 9082
+1.75 9082
+1.75 9080.5
+};
+\addplot [black]
+table {%
+2 9080.5
+2 9080
+};
+\addplot [black]
+table {%
+2 9082
+2 9082
+};
+\addplot [black]
+table {%
+1.875 9080
+2.125 9080
+};
+\addplot [black]
+table {%
+1.875 9082
+2.125 9082
+};
+\addplot [black]
+table {%
+2.75 11840
+3.25 11840
+3.25 11842
+2.75 11842
+2.75 11840
+};
+\addplot [black]
+table {%
+3 11840
+3 11838
+};
+\addplot [black]
+table {%
+3 11842
+3 11842
+};
+\addplot [black]
+table {%
+2.875 11838
+3.125 11838
+};
+\addplot [black]
+table {%
+2.875 11842
+3.125 11842
+};
+\addplot [black]
+table {%
+3.75 1214
+4.25 1214
+4.25 1214
+3.75 1214
+3.75 1214
+};
+\addplot [black]
+table {%
+4 1214
+4 1214
+};
+\addplot [black]
+table {%
+4 1214
+4 1214
+};
+\addplot [black]
+table {%
+3.875 1214
+4.125 1214
+};
+\addplot [black]
+table {%
+3.875 1214
+4.125 1214
+};
+\addplot [black]
+table {%
+4.75 4666
+5.25 4666
+5.25 4666
+4.75 4666
+4.75 4666
+};
+\addplot [black]
+table {%
+5 4666
+5 4666
+};
+\addplot [black]
+table {%
+5 4666
+5 4666
+};
+\addplot [black]
+table {%
+4.875 4666
+5.125 4666
+};
+\addplot [black]
+table {%
+4.875 4666
+5.125 4666
+};
+\addplot [black]
+table {%
+5.75 6780.5
+6.25 6780.5
+6.25 6782
+5.75 6782
+5.75 6780.5
+};
+\addplot [black]
+table {%
+6 6780.5
+6 6780
+};
+\addplot [black]
+table {%
+6 6782
+6 6782
+};
+\addplot [black]
+table {%
+5.875 6780
+6.125 6780
+};
+\addplot [black]
+table {%
+5.875 6782
+6.125 6782
+};
+\addplot [black]
+table {%
+6.75 1276
+7.25 1276
+7.25 1276
+6.75 1276
+6.75 1276
+};
+\addplot [black]
+table {%
+7 1276
+7 1276
+};
+\addplot [black]
+table {%
+7 1276
+7 1276
+};
+\addplot [black]
+table {%
+6.875 1276
+7.125 1276
+};
+\addplot [black]
+table {%
+6.875 1276
+7.125 1276
+};
+\addplot [black]
+table {%
+7.75 4790
+8.25 4790
+8.25 4790
+7.75 4790
+7.75 4790
+};
+\addplot [black]
+table {%
+8 4790
+8 4790
+};
+\addplot [black]
+table {%
+8 4790
+8 4790
+};
+\addplot [black]
+table {%
+7.875 4790
+8.125 4790
+};
+\addplot [black]
+table {%
+7.875 4790
+8.125 4790
+};
+\addplot [black]
+table {%
+8.75 2344
+9.25 2344
+9.25 2344
+8.75 2344
+8.75 2344
+};
+\addplot [black]
+table {%
+9 2344
+9 2344
+};
+\addplot [black]
+table {%
+9 2344
+9 2344
+};
+\addplot [black]
+table {%
+8.875 2344
+9.125 2344
+};
+\addplot [black]
+table {%
+8.875 2344
+9.125 2344
+};
+\addplot [black]
+table {%
+9.75 2876
+10.25 2876
+10.25 2876
+9.75 2876
+9.75 2876
+};
+\addplot [black]
+table {%
+10 2876
+10 2876
+};
+\addplot [black]
+table {%
+10 2876
+10 2876
+};
+\addplot [black]
+table {%
+9.875 2876
+10.125 2876
+};
+\addplot [black]
+table {%
+9.875 2876
+10.125 2876
+};
+\addplot [black]
+table {%
+10.75 3810.5
+11.25 3810.5
+11.25 3812
+10.75 3812
+10.75 3810.5
+};
+\addplot [black]
+table {%
+11 3810.5
+11 3810
+};
+\addplot [black]
+table {%
+11 3812
+11 3812
+};
+\addplot [black]
+table {%
+10.875 3810
+11.125 3810
+};
+\addplot [black]
+table {%
+10.875 3812
+11.125 3812
+};
+\addplot [black]
+table {%
+11.75 2696
+12.25 2696
+12.25 2696
+11.75 2696
+11.75 2696
+};
+\addplot [black]
+table {%
+12 2696
+12 2696
+};
+\addplot [black]
+table {%
+12 2696
+12 2696
+};
+\addplot [black]
+table {%
+11.875 2696
+12.125 2696
+};
+\addplot [black]
+table {%
+11.875 2696
+12.125 2696
+};
+\addplot [steelblue70100170]
+table {%
+0.75 3426
+1.25 3426
+};
+\addplot [steelblue70100170]
+table {%
+1.75 9082
+2.25 9082
+};
+\addplot [steelblue70100170]
+table {%
+2.75 11842
+3.25 11842
+};
+\addplot [steelblue70100170]
+table {%
+3.75 1214
+4.25 1214
+};
+\addplot [steelblue70100170]
+table {%
+4.75 4666
+5.25 4666
+};
+\addplot [steelblue70100170]
+table {%
+5.75 6782
+6.25 6782
+};
+\addplot [steelblue70100170]
+table {%
+6.75 1276
+7.25 1276
+};
+\addplot [steelblue70100170]
+table {%
+7.75 4790
+8.25 4790
+};
+\addplot [steelblue70100170]
+table {%
+8.75 2344
+9.25 2344
+};
+\addplot [steelblue70100170]
+table {%
+9.75 2876
+10.25 2876
+};
+\addplot [steelblue70100170]
+table {%
+10.75 3812
+11.25 3812
+};
+\addplot [steelblue70100170]
+table {%
+11.75 2696
+12.25 2696
+};
+\end{axis}
+
+\end{tikzpicture}

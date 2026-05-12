@@ -1,0 +1,95 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkcyan0150130}{RGB}{0,150,130}
+\definecolor{darkgoldenrod16713046}{RGB}{167,130,46}
+\definecolor{darkmagenta16316124}{RGB}{163,16,124}
+\definecolor{darkslategray51}{RGB}{51,51,51}
+\definecolor{dimgray102}{RGB}{102,102,102}
+\definecolor{lightgray204}{RGB}{204,204,204}
+\definecolor{steelblue70100170}{RGB}{70,100,170}
+
+\begin{axis}[
+axis line style={dimgray102},
+legend cell align={left},
+legend style={
+  fill opacity=0.8,
+  draw opacity=1,
+  text opacity=1,
+  at={(0.91,0.5)},
+  anchor=east,
+  draw=lightgray204
+},
+tick align=outside,
+tick pos=left,
+title={Workflow Duration by Run (V2)},
+x grid style={lightgray204},
+xlabel=\textcolor{black}{Run #},
+xmajorgrids,
+xmin=0.55, xmax=10.45,
+xtick style={color=darkslategray51},
+y grid style={lightgray204},
+ylabel=\textcolor{black}{Client Duration (s)},
+ymajorgrids,
+ymin=0, ymax=459.00863715,
+ytick style={color=darkslategray51}
+]
+\addplot [semithick, darkcyan0150130, mark=*, mark size=3, mark options={solid}]
+table {%
+1 112.993149
+2 114.907884
+3 120.162628
+4 113.072345
+5 111.126862
+6 122.129524
+7 108.364529
+8 115.469395
+9 111.853821
+10 112.717673
+};
+\addlegendentry{csr}
+\addplot [semithick, steelblue70100170, mark=*, mark size=3, mark options={solid}]
+table {%
+1 22.950822
+2 24.979234
+3 20.934606
+4 24.976447
+5 26.991817
+6 22.983844
+7 21.021638
+8 22.921558
+9 23.008828
+10 22.990798
+};
+\addlegendentry{revocation}
+\addplot [semithick, darkgoldenrod16713046, mark=*, mark size=3, mark options={solid}]
+table {%
+1 438.147969
+2 330.60154
+3 304.855599
+4 330.603449
+5 326.945578
+6 310.679065
+7 323.023897
+8 326.902831
+9 353.598729
+10 318.549759
+};
+\addlegendentry{removal}
+\addplot [semithick, darkmagenta16316124, mark=*, mark size=3, mark options={solid}]
+table {%
+1 314.366163
+2 383.04075
+3 338.68113
+4 324.678174
+5 312.276776
+6 324.884228
+7 344.723186
+8 343.346047
+9 324.783196
+10 357.268842
+};
+\addlegendentry{join}
+\end{axis}
+
+\end{tikzpicture}
